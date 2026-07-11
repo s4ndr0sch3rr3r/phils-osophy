@@ -113,6 +113,14 @@ fun App() {
                         selectedMovieId = movieId
                         currentScreen = AppScreen.MovieDetail
                     },
+                    onFavoriteClick = { movieId, isFavorite ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateFavorite(
+                                movieId = movieId,
+                                isFavorite = isFavorite
+                            )
+                        }
+                    },
                     onBackClick = {
                         currentScreen = AppScreen.MoviesMenu
                     }
