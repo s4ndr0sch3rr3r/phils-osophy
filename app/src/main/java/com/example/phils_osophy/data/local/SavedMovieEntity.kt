@@ -19,13 +19,16 @@ data class SavedMovieEntity(
     @ColumnInfo(defaultValue = "0")
     val userRating: Int,
     @ColumnInfo(defaultValue = "''")
-    val note: String
+    val note: String,
+    @ColumnInfo(defaultValue = "0")
+    val isFavorite: Boolean
 )
 
 fun MovieDto.toSavedMovieEntity(
     addedAtEpochMillis: Long = System.currentTimeMillis(),
     userRating: Int = 0,
-    note: String = ""
+    note: String = "",
+    isFavorite: Boolean = false
 ): SavedMovieEntity =
     SavedMovieEntity(
         id = id,
@@ -36,7 +39,8 @@ fun MovieDto.toSavedMovieEntity(
         voteAverage = voteAverage,
         addedAtEpochMillis = addedAtEpochMillis,
         userRating = userRating.coerceIn(0, 10),
-        note = note
+        note = note,
+        isFavorite = isFavorite
     )
 
 fun SavedMovieEntity.toMovieDto(): MovieDto =
