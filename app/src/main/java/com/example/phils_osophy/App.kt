@@ -9,6 +9,7 @@ import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.SeriesMenuScreen
+import com.example.phils_osophy.ui.screens.MovieSearchScreen
 
 @Composable
 fun App() {
@@ -45,8 +46,7 @@ fun App() {
         }
 
         AppScreen.MoviesMenu -> {
-            EmptyPageScreen(
-                title = "Movies",
+            MovieSearchScreen(
                 onBackClick = ::goBackToMainMenu
             )
         }
