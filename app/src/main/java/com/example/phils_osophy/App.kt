@@ -1,18 +1,23 @@
 package com.example.phils_osophy
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import com.example.phils_osophy.data.remote.MovieDto
+import androidx.compose.ui.platform.LocalContext
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
+import com.example.phils_osophy.data.local.toMovieDto
+import com.example.phils_osophy.data.local.toSavedMovieEntity
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
 import com.example.phils_osophy.ui.screens.SeriesMenuScreen
+import kotlinx.coroutines.launch
 
 @Composable
 fun App() {
@@ -20,9 +25,22 @@ fun App() {
         mutableStateOf(AppScreen.MainMenu)
     }
 
-    val savedMovies = remember {
-        mutableStateListOf<MovieDto>()
+    val applicationContext = LocalContext.current.applicationContext
+    val savedMovieDao = remember(applicationContext) {
+        PhilsOsophyDatabase
+            .getInstance(applicationContext)
+            .savedMovieDao()
     }
+    val savedMoviesFlow = remember(savedMovieDao) {
+        savedMovieDao.observeAll()
+    }
+    val savedMovieEntities by savedMoviesFlow.collectAsState(
+        initial = emptyList()
+    )
+    val savedMovies = savedMovieEntities.map { entity ->
+        entity.toMovieDto()
+    }
+    val coroutineScope = rememberCoroutineScope()
 
     fun goBackToMainMenu() {
         currentScreen = AppScreen.MainMenu
@@ -60,11 +78,10 @@ fun App() {
                     .map { movie -> movie.id }
                     .toSet(),
                 onAddMovie = { movie ->
-                    if (savedMovies.none {
-                            savedMovie ->
-                        savedMovie.id == movie.id
-                    }) {
-                        savedMovies.add(movie)
+                    coroutineScope.launch {
+                        savedMovieDao.insert(
+                            movie.toSavedMovieEntity()
+                        )
                     }
                 },
                 onOpenList = {
