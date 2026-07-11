@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.toMovieDto
 import com.example.phils_osophy.data.local.toSavedMovieEntity
+import com.example.phils_osophy.data.remote.MovieDto
+import com.example.phils_osophy.ui.screens.AddMovieDialog
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
@@ -27,6 +29,9 @@ fun App() {
     }
     var selectedMovieId by remember {
         mutableStateOf<Int?>(null)
+    }
+    var pendingMovie by remember {
+        mutableStateOf<MovieDto?>(null)
     }
 
     val applicationContext = LocalContext.current.applicationContext
@@ -82,11 +87,7 @@ fun App() {
                     .map { movie -> movie.id }
                     .toSet(),
                 onAddMovie = { movie ->
-                    coroutineScope.launch {
-                        savedMovieDao.insert(
-                            movie.toSavedMovieEntity()
-                        )
-                    }
+                    pendingMovie = movie
                 },
                 onOpenList = {
                     currentScreen = AppScreen.MoviesList
@@ -237,5 +238,25 @@ fun App() {
                 onBackClick = ::goBackToBooksMenu
             )
         }
+    }
+
+    pendingMovie?.let { movie ->
+        AddMovieDialog(
+            movie = movie,
+            onAdd = { rating, note ->
+                coroutineScope.launch {
+                    savedMovieDao.insert(
+                        movie.toSavedMovieEntity(
+                            userRating = rating,
+                            note = note
+                        )
+                    )
+                }
+                pendingMovie = null
+            },
+            onCancel = {
+                pendingMovie = null
+            }
+        )
     }
 }

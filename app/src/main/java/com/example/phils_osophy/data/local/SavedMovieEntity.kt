@@ -15,11 +15,17 @@ data class SavedMovieEntity(
     val releaseDate: String,
     val voteAverage: Double,
     @ColumnInfo(defaultValue = "0")
-    val addedAtEpochMillis: Long
+    val addedAtEpochMillis: Long,
+    @ColumnInfo(defaultValue = "0")
+    val userRating: Int,
+    @ColumnInfo(defaultValue = "''")
+    val note: String
 )
 
 fun MovieDto.toSavedMovieEntity(
-    addedAtEpochMillis: Long = System.currentTimeMillis()
+    addedAtEpochMillis: Long = System.currentTimeMillis(),
+    userRating: Int = 0,
+    note: String = ""
 ): SavedMovieEntity =
     SavedMovieEntity(
         id = id,
@@ -28,7 +34,9 @@ fun MovieDto.toSavedMovieEntity(
         posterPath = posterPath,
         releaseDate = releaseDate,
         voteAverage = voteAverage,
-        addedAtEpochMillis = addedAtEpochMillis
+        addedAtEpochMillis = addedAtEpochMillis,
+        userRating = userRating.coerceIn(0, 10),
+        note = note
     )
 
 fun SavedMovieEntity.toMovieDto(): MovieDto =
