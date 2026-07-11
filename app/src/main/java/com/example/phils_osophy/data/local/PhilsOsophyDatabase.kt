@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SavedMovieEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -51,6 +51,16 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration3To4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE saved_movies " +
+                        "ADD COLUMN isFavorite " +
+                        "INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -60,7 +70,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                 )
                     .addMigrations(
                         migration1To2,
-                        migration2To3
+                        migration2To3,
+                        migration3To4
                     )
                     .build()
                     .also { database ->
