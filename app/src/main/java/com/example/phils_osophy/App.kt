@@ -2,18 +2,27 @@ package com.example.phils_osophy
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
-import com.example.phils_osophy.ui.screens.SeriesMenuScreen
+import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
+import com.example.phils_osophy.ui.screens.SeriesMenuScreen
 
 @Composable
 fun App() {
-    var currentScreen by remember { mutableStateOf(AppScreen.MainMenu) }
+    var currentScreen by remember {
+        mutableStateOf(AppScreen.MainMenu)
+    }
+
+    val savedMovies = remember {
+        mutableStateListOf<MovieDto>()
+    }
 
     fun goBackToMainMenu() {
         currentScreen = AppScreen.MainMenu
@@ -47,7 +56,30 @@ fun App() {
 
         AppScreen.MoviesMenu -> {
             MovieSearchScreen(
+                savedMovieIds = savedMovies
+                    .map { movie -> movie.id }
+                    .toSet(),
+                onAddMovie = { movie ->
+                    if (savedMovies.none {
+                            savedMovie ->
+                        savedMovie.id == movie.id
+                    }) {
+                        savedMovies.add(movie)
+                    }
+                },
+                onOpenList = {
+                    currentScreen = AppScreen.MoviesList
+                },
                 onBackClick = ::goBackToMainMenu
+            )
+        }
+
+        AppScreen.MoviesList -> {
+            MovieListScreen(
+                movies = savedMovies,
+                onBackClick = {
+                    currentScreen = AppScreen.MoviesMenu
+                }
             )
         }
 
@@ -62,16 +94,20 @@ fun App() {
             SeriesMenuScreen(
                 onBackClick = ::goBackToMainMenu,
                 onInProgressClick = {
-                    currentScreen = AppScreen.SeriesInProgress
+                    currentScreen =
+                        AppScreen.SeriesInProgress
                 },
                 onFinishedClick = {
-                    currentScreen = AppScreen.SeriesFinished
+                    currentScreen =
+                        AppScreen.SeriesFinished
                 },
                 onToWatchClick = {
-                    currentScreen = AppScreen.SeriesToWatch
+                    currentScreen =
+                        AppScreen.SeriesToWatch
                 },
                 onStoppedClick = {
-                    currentScreen = AppScreen.SeriesStopped
+                    currentScreen =
+                        AppScreen.SeriesStopped
                 }
             )
         }
@@ -80,16 +116,20 @@ fun App() {
             BooksMenuScreen(
                 onBackClick = ::goBackToMainMenu,
                 onInProgressClick = {
-                    currentScreen = AppScreen.BooksInProgress
+                    currentScreen =
+                        AppScreen.BooksInProgress
                 },
                 onFinishedClick = {
-                    currentScreen = AppScreen.BooksFinished
+                    currentScreen =
+                        AppScreen.BooksFinished
                 },
                 onToReadClick = {
-                    currentScreen = AppScreen.BooksToRead
+                    currentScreen =
+                        AppScreen.BooksToRead
                 },
                 onAbandonedClick = {
-                    currentScreen = AppScreen.BooksAbandoned
+                    currentScreen =
+                        AppScreen.BooksAbandoned
                 }
             )
         }

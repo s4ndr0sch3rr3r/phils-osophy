@@ -4,6 +4,7 @@ enum class AppScreen {
     MainMenu,
 
     MoviesMenu,
+    MoviesList,
     GamesMenu,
 
     SeriesMenu,
