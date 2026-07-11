@@ -27,4 +27,7 @@ interface SavedMovieDao {
         movieId: Int,
         isFavorite: Boolean
     )
+
+    @Query("DELETE FROM saved_movies WHERE id = :movieId")
+    suspend fun deleteById(movieId: Int)
 }
