@@ -18,11 +18,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.phils_osophy.data.remote.MovieDto
+import com.example.phils_osophy.data.local.SavedMovieEntity
 
 @Composable
 fun MovieListScreen(
-    movies: List<MovieDto>,
+    movies: List<SavedMovieEntity>,
+    onMovieClick: (Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     Column(
@@ -56,6 +57,9 @@ fun MovieListScreen(
                     key = { movie -> movie.id }
                 ) { movie ->
                     Card(
+                        onClick = {
+                            onMovieClick(movie.id)
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
@@ -69,8 +73,7 @@ fun MovieListScreen(
                             )
 
                             Spacer(
-                                modifier =
-                                    Modifier.height(4.dp)
+                                modifier = Modifier.height(4.dp)
                             )
 
                             Text(
@@ -84,8 +87,7 @@ fun MovieListScreen(
                             )
 
                             Spacer(
-                                modifier =
-                                    Modifier.height(4.dp)
+                                modifier = Modifier.height(4.dp)
                             )
 
                             Text(

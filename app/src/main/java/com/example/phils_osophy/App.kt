@@ -14,6 +14,7 @@ import com.example.phils_osophy.data.local.toSavedMovieEntity
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
+import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
 import com.example.phils_osophy.ui.screens.SeriesMenuScreen
@@ -23,6 +24,9 @@ import kotlinx.coroutines.launch
 fun App() {
     var currentScreen by remember {
         mutableStateOf(AppScreen.MainMenu)
+    }
+    var selectedMovieId by remember {
+        mutableStateOf<Int?>(null)
     }
 
     val applicationContext = LocalContext.current.applicationContext
@@ -93,11 +97,38 @@ fun App() {
 
         AppScreen.MoviesList -> {
             MovieListScreen(
-                movies = savedMovies,
+                movies = savedMovieEntities,
+                onMovieClick = { movieId ->
+                    selectedMovieId = movieId
+                    currentScreen = AppScreen.MovieDetail
+                },
                 onBackClick = {
                     currentScreen = AppScreen.MoviesMenu
                 }
             )
+        }
+
+        AppScreen.MovieDetail -> {
+            val selectedMovie = savedMovieEntities
+                .firstOrNull { movie ->
+                    movie.id == selectedMovieId
+                }
+
+            if (selectedMovie != null) {
+                MovieDetailScreen(
+                    movie = selectedMovie,
+                    onBackClick = {
+                        currentScreen = AppScreen.MoviesList
+                    }
+                )
+            } else {
+                EmptyPageScreen(
+                    title = "Movie unavailable",
+                    onBackClick = {
+                        currentScreen = AppScreen.MoviesList
+                    }
+                )
+            }
         }
 
         AppScreen.GamesMenu -> {
