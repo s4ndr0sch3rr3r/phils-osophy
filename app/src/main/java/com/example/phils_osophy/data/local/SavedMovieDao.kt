@@ -17,4 +17,14 @@ interface SavedMovieDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(movie: SavedMovieEntity)
+
+    @Query(
+        "UPDATE saved_movies " +
+            "SET isFavorite = :isFavorite " +
+            "WHERE id = :movieId"
+    )
+    suspend fun updateFavorite(
+        movieId: Int,
+        isFavorite: Boolean
+    )
 }
