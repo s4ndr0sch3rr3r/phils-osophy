@@ -1,6 +1,8 @@
 package com.example.phils_osophy.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,10 +12,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -40,10 +46,14 @@ import com.example.phils_osophy.data.local.SavedMovieEntity
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
 
+private val RatingBadgeColor = Color(0xFFD32F2F)
+private val FavoriteColor = Color(0xFFE53935)
+
 @Composable
 fun MovieListScreen(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
+    onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
     onBackClick: () -> Unit
 ) {
     Column(
@@ -74,10 +84,8 @@ fun MovieListScreen(
                 columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement =
-                    androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp),
-                verticalArrangement =
-                    androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(
                     items = movies,
@@ -87,6 +95,12 @@ fun MovieListScreen(
                         movie = movie,
                         onClick = {
                             onMovieClick(movie.id)
+                        },
+                        onFavoriteClick = {
+                            onFavoriteClick(
+                                movie.id,
+                                !movie.isFavorite
+                            )
                         }
                     )
                 }
@@ -98,7 +112,8 @@ fun MovieListScreen(
 @Composable
 private fun MoviePosterTile(
     movie: SavedMovieEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit
 ) {
     val posterUrl = movie.posterPath
         ?.takeIf { path -> path.isNotBlank() }
@@ -163,6 +178,47 @@ private fun MoviePosterTile(
                         textAlign = TextAlign.Center,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(5.dp)
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .clickable(onClick = onFavoriteClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (movie.isFavorite) "♥" else "♡",
+                    color = if (movie.isFavorite) {
+                        FavoriteColor
+                    } else {
+                        Color.White
+                    },
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (movie.userRating in 1..10) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(30.dp)
+                        .clip(CircleShape)
+                        .background(RatingBadgeColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = movie.userRating.toString(),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
