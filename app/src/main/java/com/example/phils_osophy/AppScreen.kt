@@ -6,13 +6,16 @@ enum class AppScreen {
     MoviesMenu,
     MoviesList,
     MovieDetail,
-    GamesMenu,
 
     SeriesMenu,
     SeriesInProgress,
     SeriesFinished,
     SeriesToWatch,
     SeriesStopped,
+
+    Explore,
+    Profile,
+    GamesMenu,
 
     BooksMenu,
     BooksInProgress,
