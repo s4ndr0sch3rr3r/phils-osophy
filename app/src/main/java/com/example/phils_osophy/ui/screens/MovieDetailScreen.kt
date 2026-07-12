@@ -55,6 +55,7 @@ fun MovieDetailScreen(
     movie: SavedMovieEntity,
     onBackClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
+    onChangeRating: (Int) -> Unit,
     onRemoveMovieClick: () -> Unit
 ) {
     var details by remember(movie.id) {
@@ -67,6 +68,9 @@ fun MovieDetailScreen(
         mutableStateOf(false)
     }
     var isMenuExpanded by remember {
+        mutableStateOf(false)
+    }
+    var isRatingDialogVisible by remember {
         mutableStateOf(false)
     }
 
@@ -218,6 +222,16 @@ fun MovieDetailScreen(
 
                     DropdownMenuItem(
                         text = {
+                            Text("Change rating")
+                        },
+                        onClick = {
+                            isMenuExpanded = false
+                            isRatingDialogVisible = true
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
                             Text(
                                 text = "Remove movie",
                                 color = MaterialTheme.colorScheme.error
@@ -315,6 +329,19 @@ fun MovieDetailScreen(
                 style = MaterialTheme.typography.bodyLarge
             )
         }
+    }
+
+    if (isRatingDialogVisible) {
+        ChangeMovieRatingDialog(
+            initialRating = movie.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                isRatingDialogVisible = false
+            },
+            onCancel = {
+                isRatingDialogVisible = false
+            }
+        )
     }
 }
 
