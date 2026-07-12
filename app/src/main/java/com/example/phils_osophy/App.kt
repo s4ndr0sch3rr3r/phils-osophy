@@ -1,5 +1,6 @@
 package com.example.phils_osophy
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,7 +23,6 @@ import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.EpisodeDetailScreen
 import com.example.phils_osophy.ui.screens.GameLibraryScreen
-import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun App() {
     var currentScreen by remember {
-        mutableStateOf(AppScreen.MainMenu)
+        mutableStateOf(AppScreen.MoviesMenu)
     }
     var selectedMovieId by remember {
         mutableStateOf<Int?>(null)
@@ -147,18 +147,41 @@ fun App() {
 
     val coroutineScope = rememberCoroutineScope()
 
-    fun goBackToMainMenu() {
-        currentScreen = AppScreen.MainMenu
-    }
-
-    fun goBackToBooksMenu() {
-        currentScreen = AppScreen.BooksMenu
-    }
-
     fun clearSelectedSeries() {
         selectedSeriesId = null
         selectedSeasonNumber = null
         selectedEpisodeNumber = null
+    }
+
+    fun openMovies() {
+        pendingMovie = null
+        selectedMovieId = null
+        clearSelectedSeries()
+        currentScreen = AppScreen.MoviesMenu
+    }
+
+    fun openSeriesLibrary() {
+        selectedSeasonNumber = null
+        selectedEpisodeNumber = null
+        currentScreen = AppScreen.SeriesMenu
+    }
+
+    BackHandler(enabled = currentScreen != AppScreen.MoviesMenu) {
+        when (currentScreen) {
+            AppScreen.MoviesList,
+            AppScreen.MovieDetail -> openMovies()
+
+            AppScreen.SeriesMenu -> openMovies()
+            AppScreen.SeriesDetail -> openSeriesLibrary()
+            AppScreen.EpisodeDetail -> currentScreen = AppScreen.SeriesDetail
+
+            AppScreen.Explore,
+            AppScreen.Profile,
+            AppScreen.GamesMenu,
+            AppScreen.BooksMenu -> openMovies()
+
+            AppScreen.MoviesMenu -> Unit
+        }
     }
 
     AppScaffold(
@@ -171,23 +194,6 @@ fun App() {
         }
     ) {
         when (currentScreen) {
-            AppScreen.MainMenu -> {
-                MainMenuScreen(
-                    onMoviesClick = {
-                        currentScreen = AppScreen.MoviesMenu
-                    },
-                    onSeriesClick = {
-                        currentScreen = AppScreen.SeriesMenu
-                    },
-                    onGamesClick = {
-                        currentScreen = AppScreen.GamesMenu
-                    },
-                    onBooksClick = {
-                        currentScreen = AppScreen.BooksMenu
-                    }
-                )
-            }
-
             AppScreen.MoviesMenu -> {
                 MovieSearchScreen(
                     savedMovies = savedMovieEntities,
@@ -206,7 +212,7 @@ fun App() {
                             )
                         }
                     },
-                    onBackClick = ::goBackToMainMenu
+                    onBackClick = ::openMovies
                 )
             }
 
@@ -225,9 +231,7 @@ fun App() {
                             )
                         }
                     },
-                    onBackClick = {
-                        currentScreen = AppScreen.MoviesMenu
-                    }
+                    onBackClick = ::openMovies
                 )
             }
 
@@ -240,9 +244,7 @@ fun App() {
                 if (selectedMovie != null) {
                     MovieDetailScreen(
                         movie = selectedMovie,
-                        onBackClick = {
-                            currentScreen = AppScreen.MoviesMenu
-                        },
+                        onBackClick = ::openMovies,
                         onFavoriteClick = { isFavorite ->
                             coroutineScope.launch {
                                 savedMovieDao.updateFavorite(
@@ -262,17 +264,14 @@ fun App() {
                         onRemoveMovieClick = {
                             coroutineScope.launch {
                                 savedMovieDao.deleteById(selectedMovie.id)
-                                selectedMovieId = null
-                                currentScreen = AppScreen.MoviesMenu
+                                openMovies()
                             }
                         }
                     )
                 } else {
                     EmptyPageScreen(
                         title = "Movie unavailable",
-                        onBackClick = {
-                            currentScreen = AppScreen.MoviesMenu
-                        }
+                        onBackClick = ::openMovies
                     )
                 }
             }
@@ -318,7 +317,7 @@ fun App() {
                             savedSeriesDao.deleteById(seriesId)
                         }
                     },
-                    onBackClick = ::goBackToMainMenu
+                    onBackClick = ::openMovies
                 )
             }
 
@@ -332,9 +331,7 @@ fun App() {
                     SeriesDetailScreen(
                         series = selectedSeries,
                         watchedEpisodes = watchedEpisodeKeys,
-                        onBackClick = {
-                            currentScreen = AppScreen.SeriesMenu
-                        },
+                        onBackClick = ::openSeriesLibrary,
                         onFavoriteClick = { isFavorite ->
                             coroutineScope.launch {
                                 savedSeriesDao.updateFavorite(
@@ -374,9 +371,7 @@ fun App() {
                 } else {
                     EmptyPageScreen(
                         title = "Series unavailable",
-                        onBackClick = {
-                            currentScreen = AppScreen.SeriesMenu
-                        }
+                        onBackClick = ::openSeriesLibrary
                     )
                 }
             }
@@ -431,9 +426,7 @@ fun App() {
                 } else {
                     EmptyPageScreen(
                         title = "Episode unavailable",
-                        onBackClick = {
-                            currentScreen = AppScreen.SeriesMenu
-                        }
+                        onBackClick = ::openSeriesLibrary
                     )
                 }
             }
@@ -441,14 +434,14 @@ fun App() {
             AppScreen.Explore -> {
                 EmptyPageScreen(
                     title = "Explore",
-                    onBackClick = ::goBackToMainMenu
+                    onBackClick = ::openMovies
                 )
             }
 
             AppScreen.Profile -> {
                 EmptyPageScreen(
                     title = "Profile",
-                    onBackClick = ::goBackToMainMenu
+                    onBackClick = ::openMovies
                 )
             }
 
@@ -471,53 +464,17 @@ fun App() {
                             )
                         }
                     },
-                    onBackClick = ::goBackToMainMenu
+                    onBackClick = ::openMovies
                 )
             }
 
             AppScreen.BooksMenu -> {
                 BooksMenuScreen(
-                    onBackClick = ::goBackToMainMenu,
-                    onInProgressClick = {
-                        currentScreen = AppScreen.BooksInProgress
-                    },
-                    onFinishedClick = {
-                        currentScreen = AppScreen.BooksFinished
-                    },
-                    onToReadClick = {
-                        currentScreen = AppScreen.BooksToRead
-                    },
-                    onAbandonedClick = {
-                        currentScreen = AppScreen.BooksAbandoned
-                    }
-                )
-            }
-
-            AppScreen.BooksInProgress -> {
-                EmptyPageScreen(
-                    title = "Livres en cours",
-                    onBackClick = ::goBackToBooksMenu
-                )
-            }
-
-            AppScreen.BooksFinished -> {
-                EmptyPageScreen(
-                    title = "Livres terminés",
-                    onBackClick = ::goBackToBooksMenu
-                )
-            }
-
-            AppScreen.BooksToRead -> {
-                EmptyPageScreen(
-                    title = "Livres à lire",
-                    onBackClick = ::goBackToBooksMenu
-                )
-            }
-
-            AppScreen.BooksAbandoned -> {
-                EmptyPageScreen(
-                    title = "Livres abandonnés",
-                    onBackClick = ::goBackToBooksMenu
+                    onBackClick = ::openMovies,
+                    onInProgressClick = {},
+                    onFinishedClick = {},
+                    onToReadClick = {},
+                    onAbandonedClick = {}
                 )
             }
         }
@@ -544,7 +501,7 @@ fun App() {
     }
 }
 
-private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
+private fun AppScreen.toBottomCategory(): BottomCategory = when (this) {
     AppScreen.MoviesMenu,
     AppScreen.MoviesList,
     AppScreen.MovieDetail -> BottomCategory.Movies
@@ -556,14 +513,7 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.Explore -> BottomCategory.Explore
     AppScreen.Profile -> BottomCategory.Profile
     AppScreen.GamesMenu -> BottomCategory.Games
-
-    AppScreen.BooksMenu,
-    AppScreen.BooksInProgress,
-    AppScreen.BooksFinished,
-    AppScreen.BooksToRead,
-    AppScreen.BooksAbandoned -> BottomCategory.Books
-
-    AppScreen.MainMenu -> null
+    AppScreen.BooksMenu -> BottomCategory.Books
 }
 
 private fun BottomCategory.toAppScreen(): AppScreen = when (this) {
