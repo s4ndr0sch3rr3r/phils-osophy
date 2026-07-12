@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,8 +39,10 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.remote.EpisodeDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import kotlinx.coroutines.launch
 
 private const val TMDB_EPISODE_DETAIL_IMAGE_BASE_URL =
     "https://image.tmdb.org/t/p/w780"
@@ -65,6 +68,11 @@ fun EpisodeDetailScreen(
     var errorMessage by remember(seriesId, seasonNumber, episodeNumber) {
         mutableStateOf<String?>(null)
     }
+    val applicationContext = LocalContext.current.applicationContext
+    val completionTracker = remember(applicationContext) {
+        SeriesCompletionTracker(applicationContext)
+    }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(seriesId, seasonNumber, episodeNumber) {
         isLoading = true
@@ -115,7 +123,8 @@ fun EpisodeDetailScreen(
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = loadedEpisode?.name ?: "Episode image",
+                    contentDescription = loadedEpisode?.name
+                        ?: "Episode image",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -123,7 +132,9 @@ fun EpisodeDetailScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .background(
+                            MaterialTheme.colorScheme.surfaceVariant
+                        )
                 )
             }
 
@@ -239,13 +250,26 @@ fun EpisodeDetailScreen(
                         shape = CircleShape
                     )
                     .clickable {
-                        onWatchedChange(!isWatched)
+                        val watched = !isWatched
+                        onWatchedChange(watched)
+                        coroutineScope.launch {
+                            completionTracker.setEpisodeWatched(
+                                seriesId = seriesId,
+                                seasonNumber = seasonNumber,
+                                episodeNumber = episodeNumber,
+                                watched = watched
+                            )
+                        }
                     },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "✓",
-                    color = if (isWatched) Color.White else Color.Gray,
+                    color = if (isWatched) {
+                        Color.White
+                    } else {
+                        Color.Gray
+                    },
                     fontSize = 30.sp,
                     fontWeight = FontWeight.Bold
                 )
