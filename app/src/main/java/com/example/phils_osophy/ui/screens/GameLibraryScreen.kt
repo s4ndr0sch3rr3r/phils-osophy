@@ -88,6 +88,7 @@ fun GameLibraryScreen(
         playerCount: Int,
         isFinished: Boolean
     ) -> Unit,
+    onChangeRating: (gameId: Long, rating: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     var showAddDialog by remember {
@@ -149,6 +150,9 @@ fun GameLibraryScreen(
                 game = selectedGame,
                 onBackClick = {
                     selectedGameId = null
+                },
+                onChangeRating = { rating ->
+                    onChangeRating(selectedGame.id, rating)
                 }
             )
         } else {
@@ -328,6 +332,13 @@ private fun GamePosterCard(
                     )
                 }
 
+                UserRatingBadge(
+                    rating = game.userRating,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                )
+
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopStart)
@@ -378,7 +389,8 @@ private fun GamePosterCard(
 @Composable
 private fun GameDetailContent(
     game: SavedGameEntity,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onChangeRating: (Int) -> Unit
 ) {
     BackHandler(onBack = onBackClick)
 
@@ -391,6 +403,9 @@ private fun GameDetailContent(
     }
     var remoteError by remember(game.id) {
         mutableStateOf<String?>(null)
+    }
+    var isRatingDialogVisible by remember(game.id) {
+        mutableStateOf(false)
     }
 
     LaunchedEffect(game.id, game.name, apiKey) {
@@ -464,6 +479,10 @@ private fun GameDetailContent(
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.SemiBold
             )
+
+            TextButton(onClick = { isRatingDialogVisible = true }) {
+                Text(if (game.userRating in 1..10) "${game.userRating}/10" else "Rate")
+            }
         }
 
         LazyColumn(
@@ -734,6 +753,18 @@ private fun GameDetailContent(
                 }
             }
         }
+    }
+
+    if (isRatingDialogVisible) {
+        UserRatingDialog(
+            title = "Rate ${game.name}",
+            initialRating = game.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                isRatingDialogVisible = false
+            },
+            onCancel = { isRatingDialogVisible = false }
+        )
     }
 }
 

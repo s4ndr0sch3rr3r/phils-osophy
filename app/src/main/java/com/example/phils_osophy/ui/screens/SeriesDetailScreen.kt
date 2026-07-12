@@ -74,6 +74,7 @@ fun SeriesDetailScreen(
     watchedEpisodes: Set<WatchedEpisodeKey>,
     onBackClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
+    onChangeRating: (Int) -> Unit,
     onEpisodeClick: (
         seasonNumber: Int,
         episodeNumber: Int
@@ -101,6 +102,9 @@ fun SeriesDetailScreen(
     }
     var loadingSeasonNumber by remember(series.id) {
         mutableStateOf<Int?>(null)
+    }
+    var isRatingDialogVisible by remember(series.id) {
+        mutableStateOf(false)
     }
 
     val seasonCache = remember(series.id) {
@@ -218,7 +222,8 @@ fun SeriesDetailScreen(
                     series = series,
                     details = details,
                     completedAtEpochMillis = seriesCompletedAtEpochMillis,
-                    errorMessage = errorMessage
+                    errorMessage = errorMessage,
+                    onChangeRatingClick = { isRatingDialogVisible = true }
                 )
             }
 
@@ -269,6 +274,18 @@ fun SeriesDetailScreen(
                 )
             }
         }
+    }
+
+    if (isRatingDialogVisible) {
+        UserRatingDialog(
+            title = "Rate ${series.name}",
+            initialRating = series.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                isRatingDialogVisible = false
+            },
+            onCancel = { isRatingDialogVisible = false }
+        )
     }
 }
 
@@ -367,7 +384,8 @@ private fun SeriesInfoTab(
     series: SavedSeriesEntity,
     details: SeriesDetailsDto?,
     completedAtEpochMillis: Long?,
-    errorMessage: String?
+    errorMessage: String?,
+    onChangeRatingClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -405,6 +423,20 @@ private fun SeriesInfoTab(
         }
 
         item { HorizontalDivider() }
+
+        item {
+            DetailValue(
+                label = "Your rating",
+                value = if (series.userRating in 1..10) {
+                    "${series.userRating} / 10"
+                } else {
+                    "Not rated"
+                }
+            )
+            TextButton(onClick = onChangeRatingClick) {
+                Text("Change rating")
+            }
+        }
 
         item {
             DetailValue(

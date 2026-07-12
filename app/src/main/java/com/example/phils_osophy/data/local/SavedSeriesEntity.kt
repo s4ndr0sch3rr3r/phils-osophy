@@ -18,7 +18,9 @@ data class SavedSeriesEntity(
     val addedAtEpochMillis: Long,
     val status: String,
     @ColumnInfo(defaultValue = "0")
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    @ColumnInfo(defaultValue = "0")
+    val userRating: Int = 0
 )
 
 enum class SeriesStatus {
@@ -38,7 +40,8 @@ enum class SeriesStatus {
 fun SeriesDto.toSavedSeriesEntity(
     status: SeriesStatus,
     addedAtEpochMillis: Long = System.currentTimeMillis(),
-    isFavorite: Boolean = false
+    isFavorite: Boolean = false,
+    userRating: Int = 0
 ): SavedSeriesEntity =
     SavedSeriesEntity(
         id = id,
@@ -49,5 +52,6 @@ fun SeriesDto.toSavedSeriesEntity(
         voteAverage = voteAverage,
         addedAtEpochMillis = addedAtEpochMillis,
         status = status.name,
-        isFavorite = isFavorite
+        isFavorite = isFavorite,
+        userRating = userRating.coerceIn(0, 10)
     )

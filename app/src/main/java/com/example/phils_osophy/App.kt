@@ -364,6 +364,14 @@ fun App() {
                                 )
                             }
                         },
+                        onChangeRating = { rating ->
+                            coroutineScope.launch {
+                                savedSeriesDao.updateRating(
+                                    seriesId = selectedSeries.id,
+                                    userRating = rating.coerceIn(0, 10)
+                                )
+                            }
+                        },
                         onEpisodeClick = { seasonNumber, episodeNumber ->
                             selectedSeasonNumber = seasonNumber
                             selectedEpisodeNumber = episodeNumber
@@ -489,6 +497,14 @@ fun App() {
                                     playerCount = playerCount,
                                     isFinished = isFinished
                                 )
+                            )
+                        }
+                    },
+                    onChangeRating = { gameId, rating ->
+                        coroutineScope.launch {
+                            savedGameDao.updateRating(
+                                gameId = gameId,
+                                userRating = rating.coerceIn(0, 10)
                             )
                         }
                     },
