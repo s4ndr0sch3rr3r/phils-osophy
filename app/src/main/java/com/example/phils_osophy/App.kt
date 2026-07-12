@@ -21,6 +21,7 @@ import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
+import com.example.phils_osophy.ui.screens.SeriesDetailScreen
 import com.example.phils_osophy.ui.screens.SeriesMenuScreen
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,9 @@ fun App() {
         mutableStateOf(AppScreen.MainMenu)
     }
     var selectedMovieId by remember {
+        mutableStateOf<Int?>(null)
+    }
+    var selectedSeriesId by remember {
         mutableStateOf<Int?>(null)
     }
     var pendingMovie by remember {
@@ -82,6 +86,13 @@ fun App() {
         initial = emptyList()
     )
 
+    val allSavedSeries = (
+        inProgressSeries +
+            finishedSeries +
+            toWatchSeries +
+            stoppedSeries
+        ).distinctBy { series -> series.id }
+
     val coroutineScope = rememberCoroutineScope()
 
     fun goBackToMainMenu() {
@@ -97,6 +108,7 @@ fun App() {
         onCategoryClick = { category ->
             pendingMovie = null
             selectedMovieId = null
+            selectedSeriesId = null
             currentScreen = category.toAppScreen()
         }
     ) {
@@ -213,6 +225,10 @@ fun App() {
                     finishedSeries = finishedSeries,
                     toWatchSeries = toWatchSeries,
                     stoppedSeries = stoppedSeries,
+                    onSeriesClick = { seriesId ->
+                        selectedSeriesId = seriesId
+                        currentScreen = AppScreen.SeriesDetail
+                    },
                     onAddSeries = { series, status ->
                         coroutineScope.launch {
                             savedSeriesDao.insert(
@@ -243,6 +259,29 @@ fun App() {
                     },
                     onBackClick = ::goBackToMainMenu
                 )
+            }
+
+            AppScreen.SeriesDetail -> {
+                val selectedSeries = allSavedSeries
+                    .firstOrNull { series ->
+                        series.id == selectedSeriesId
+                    }
+
+                if (selectedSeries != null) {
+                    SeriesDetailScreen(
+                        series = selectedSeries,
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesMenu
+                        }
+                    )
+                } else {
+                    EmptyPageScreen(
+                        title = "Series unavailable",
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesMenu
+                        }
+                    )
+                }
             }
 
             AppScreen.Explore -> {
@@ -340,7 +379,8 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.MoviesList,
     AppScreen.MovieDetail -> BottomCategory.Movies
 
-    AppScreen.SeriesMenu -> BottomCategory.Series
+    AppScreen.SeriesMenu,
+    AppScreen.SeriesDetail -> BottomCategory.Series
 
     AppScreen.Explore -> BottomCategory.Explore
     AppScreen.Profile -> BottomCategory.Profile
