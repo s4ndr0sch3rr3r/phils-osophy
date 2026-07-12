@@ -578,14 +578,14 @@ private fun LibrarySeriesPoster(
                 UserRatingBadge(
                     rating = series.userRating,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
+                        .align(Alignment.TopEnd)
                         .padding(6.dp)
                 )
 
                 Text(
                     text = "•••",
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.BottomEnd)
                         .padding(6.dp)
                         .background(
                             color = Color.Black.copy(alpha = 0.65f),
