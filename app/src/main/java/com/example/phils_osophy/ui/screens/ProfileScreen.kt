@@ -38,19 +38,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.phils_osophy.data.importer.TvTimeGdprImporter
 import com.example.phils_osophy.data.local.BookStatus
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
+import com.example.phils_osophy.data.local.ProfileStatsCacheEntity
 import com.example.phils_osophy.data.local.SavedBookEntity
 import com.example.phils_osophy.data.local.SavedGameEntity
 import com.example.phils_osophy.data.local.SavedMovieEntity
 import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.WatchedEpisodeEntity
 import com.example.phils_osophy.data.remote.TmdbClient
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val ProfileGreen = Color(0xFF64DD75)
 private const val FallbackEpisodeRuntimeMinutes = 45
+private val StatisticsDateFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm")
 
 @Composable
 fun ProfileScreen(
@@ -64,13 +71,25 @@ fun ProfileScreen(
     BackHandler(onBack = onBackClick)
 
     val context = LocalContext.current.applicationContext
+    val database = remember(context) {
+        PhilsOsophyDatabase.getInstance(context)
+    }
+    val statisticsDao = remember(database) {
+        database.profileStatsCacheDao()
+    }
     val coroutineScope = rememberCoroutineScope()
+
     var isImporting by remember { mutableStateOf(false) }
     var importMessage by remember { mutableStateOf<String?>(null) }
     var importFailed by remember { mutableStateOf(false) }
-    var stats by remember { mutableStateOf<ProfileTimeStats?>(null) }
-    var isLoadingStats by remember { mutableStateOf(true) }
-    var statsRefreshToken by remember { mutableIntStateOf(0) }
+
+    var statistics by remember {
+        mutableStateOf(ProfileTimeStats.empty())
+    }
+    var cacheLoaded by remember { mutableStateOf(false) }
+    var isRefreshingStatistics by remember { mutableStateOf(false) }
+    var statisticsRefreshMessage by remember { mutableStateOf<String?>(null) }
+    var statisticsRefreshToken by remember { mutableIntStateOf(0) }
 
     val backupPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -90,7 +109,7 @@ fun ProfileScreen(
                     uri = uri
                 )
                 importMessage = result.summary()
-                statsRefreshToken += 1
+                statisticsRefreshToken += 1
             } catch (exception: Exception) {
                 importFailed = true
                 importMessage = exception.localizedMessage
@@ -101,23 +120,62 @@ fun ProfileScreen(
         }
     }
 
+    LaunchedEffect(statisticsDao) {
+        val cachedSnapshot = withContext(Dispatchers.IO) {
+            statisticsDao.getSnapshot()
+                ?: ProfileStatsCacheEntity()
+        }
+        statistics = cachedSnapshot.toProfileTimeStats()
+        cacheLoaded = true
+    }
+
     LaunchedEffect(
+        cacheLoaded,
         movies,
         series,
         watchedEpisodes,
         games,
         books,
-        statsRefreshToken
+        statisticsRefreshToken
     ) {
-        isLoadingStats = true
-        stats = loadProfileTimeStats(
-            movies = movies,
-            series = series,
-            watchedEpisodes = watchedEpisodes,
-            games = games,
-            books = books
-        )
-        isLoadingStats = false
+        if (!cacheLoaded) {
+            return@LaunchedEffect
+        }
+
+        // Room-backed lists normally arrive immediately after composition. The small
+        // debounce avoids replacing a valid cache with the initial empty UI state.
+        delay(300)
+        isRefreshingStatistics = true
+        statisticsRefreshMessage = null
+
+        try {
+            val refreshedStatistics = calculateProfileTimeStats(
+                movies = movies,
+                series = series,
+                watchedEpisodes = watchedEpisodes,
+                games = games,
+                books = books
+            )
+            val completedAt = System.currentTimeMillis()
+            val completedSnapshot = refreshedStatistics.copy(
+                calculatedAtEpochMillis = completedAt
+            )
+
+            withContext(Dispatchers.IO) {
+                statisticsDao.replaceSnapshot(
+                    completedSnapshot.toCacheEntity()
+                )
+            }
+
+            // Replace the visible snapshot only after all requests and calculations
+            // completed and the complete result was persisted.
+            statistics = completedSnapshot
+        } catch (_: Exception) {
+            statisticsRefreshMessage =
+                "Refresh failed. Showing the last saved statistics."
+        } finally {
+            isRefreshingStatistics = false
+        }
     }
 
     LazyColumn(
@@ -158,71 +216,86 @@ fun ProfileScreen(
                     fontWeight = FontWeight.SemiBold
                 )
 
+                if (isRefreshingStatistics) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                }
+
                 TextButton(
                     onClick = {
-                        statsRefreshToken += 1
+                        statisticsRefreshToken += 1
                     },
-                    enabled = !isLoadingStats
+                    enabled = !isRefreshingStatistics
                 ) {
-                    Text("Refresh")
+                    Text(
+                        if (isRefreshingStatistics) {
+                            "Updating…"
+                        } else {
+                            "Refresh"
+                        }
+                    )
                 }
             }
         }
 
-        if (isLoadingStats && stats == null) {
+        item {
+            ProfileTimeCard(
+                title = "All tracked media",
+                value = formatDuration(statistics.totalMinutes),
+                detail = statisticsSummaryDetail(statistics),
+                highlighted = true
+            )
+        }
+
+        item {
+            ProfileTimeCard(
+                title = "Movies",
+                value = formatDuration(statistics.movieMinutes),
+                detail = buildString {
+                    append("${statistics.movieCount} saved movies · TMDB runtimes")
+                    if (isRefreshingStatistics) {
+                        append(" · updating in background")
+                    }
+                }
+            )
+        }
+
+        item {
+            ProfileTimeCard(
+                title = "Series",
+                value = formatDuration(statistics.seriesMinutes),
+                detail = "${statistics.watchedEpisodeCount} watched episodes · " +
+                    "estimated from TMDB runtimes"
+            )
+        }
+
+        item {
+            ProfileTimeCard(
+                title = "Games",
+                value = formatDuration(statistics.gameMinutes),
+                detail = "${statistics.gameCount} saved games · manually tracked playtime"
+            )
+        }
+
+        item {
+            ProfileTimeCard(
+                title = "Books",
+                value = "Time not tracked",
+                detail = "${statistics.finishedBookCount}/${statistics.bookCount} books finished. " +
+                    "Reading duration is not stored, so it is excluded from the total."
+            )
+        }
+
+        statisticsRefreshMessage?.let { message ->
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 28.dp),
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    CircularProgressIndicator()
-                }
-            }
-        } else {
-            stats?.let { currentStats ->
-                item {
-                    ProfileTimeCard(
-                        title = "All tracked media",
-                        value = formatDuration(currentStats.totalMinutes),
-                        detail = "Movies, watched series episodes and games",
-                        highlighted = true
-                    )
-                }
-
-                item {
-                    ProfileTimeCard(
-                        title = "Movies",
-                        value = formatDuration(currentStats.movieMinutes),
-                        detail = "${currentStats.movieCount} saved movies · TMDB runtimes"
-                    )
-                }
-
-                item {
-                    ProfileTimeCard(
-                        title = "Series",
-                        value = formatDuration(currentStats.seriesMinutes),
-                        detail = "${currentStats.watchedEpisodeCount} watched episodes · estimated from TMDB runtimes"
-                    )
-                }
-
-                item {
-                    ProfileTimeCard(
-                        title = "Games",
-                        value = formatDuration(currentStats.gameMinutes),
-                        detail = "${currentStats.gameCount} saved games · manually tracked playtime"
-                    )
-                }
-
-                item {
-                    ProfileTimeCard(
-                        title = "Books",
-                        value = "Time not tracked",
-                        detail = "${currentStats.finishedBookCount}/${currentStats.bookCount} books finished. " +
-                            "Reading duration is not stored, so it is excluded from the total."
-                    )
-                }
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
 
@@ -388,13 +461,28 @@ private data class ProfileTimeStats(
     val watchedEpisodeCount: Int,
     val gameCount: Int,
     val bookCount: Int,
-    val finishedBookCount: Int
+    val finishedBookCount: Int,
+    val calculatedAtEpochMillis: Long
 ) {
     val totalMinutes: Long
         get() = movieMinutes + seriesMinutes + gameMinutes
+
+    companion object {
+        fun empty(): ProfileTimeStats = ProfileTimeStats(
+            movieMinutes = 0,
+            seriesMinutes = 0,
+            gameMinutes = 0,
+            movieCount = 0,
+            watchedEpisodeCount = 0,
+            gameCount = 0,
+            bookCount = 0,
+            finishedBookCount = 0,
+            calculatedAtEpochMillis = 0
+        )
+    }
 }
 
-private suspend fun loadProfileTimeStats(
+private suspend fun calculateProfileTimeStats(
     movies: List<SavedMovieEntity>,
     series: List<SavedSeriesEntity>,
     watchedEpisodes: List<WatchedEpisodeEntity>,
@@ -403,11 +491,7 @@ private suspend fun loadProfileTimeStats(
 ): ProfileTimeStats = withContext(Dispatchers.IO) {
     var movieMinutes = 0L
     movies.forEach { movie ->
-        val runtime = try {
-            TmdbClient.api.getMovieDetails(movie.id).runtime ?: 0
-        } catch (_: Exception) {
-            0
-        }
+        val runtime = TmdbClient.api.getMovieDetails(movie.id).runtime ?: 0
         movieMinutes += runtime.coerceAtLeast(0).toLong()
     }
 
@@ -422,17 +506,13 @@ private suspend fun loadProfileTimeStats(
             return@forEach
         }
 
-        val averageRuntime = try {
-            val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
-                .episodeRunTime
-                .filter { runtime -> runtime > 0 }
-            if (runtimes.isEmpty()) {
-                FallbackEpisodeRuntimeMinutes
-            } else {
-                runtimes.average().roundToInt()
-            }
-        } catch (_: Exception) {
+        val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
+            .episodeRunTime
+            .filter { runtime -> runtime > 0 }
+        val averageRuntime = if (runtimes.isEmpty()) {
             FallbackEpisodeRuntimeMinutes
+        } else {
+            runtimes.average().roundToInt()
         }
 
         seriesMinutes += watchedCount.toLong() * averageRuntime
@@ -453,8 +533,46 @@ private suspend fun loadProfileTimeStats(
         watchedEpisodeCount = watchedEpisodes.size,
         gameCount = games.size,
         bookCount = books.size,
-        finishedBookCount = finishedBooks
+        finishedBookCount = finishedBooks,
+        calculatedAtEpochMillis = 0
     )
+}
+
+private fun ProfileStatsCacheEntity.toProfileTimeStats(): ProfileTimeStats =
+    ProfileTimeStats(
+        movieMinutes = movieMinutes,
+        seriesMinutes = seriesMinutes,
+        gameMinutes = gameMinutes,
+        movieCount = movieCount,
+        watchedEpisodeCount = watchedEpisodeCount,
+        gameCount = gameCount,
+        bookCount = bookCount,
+        finishedBookCount = finishedBookCount,
+        calculatedAtEpochMillis = calculatedAtEpochMillis
+    )
+
+private fun ProfileTimeStats.toCacheEntity(): ProfileStatsCacheEntity =
+    ProfileStatsCacheEntity(
+        movieMinutes = movieMinutes,
+        seriesMinutes = seriesMinutes,
+        gameMinutes = gameMinutes,
+        movieCount = movieCount,
+        watchedEpisodeCount = watchedEpisodeCount,
+        gameCount = gameCount,
+        bookCount = bookCount,
+        finishedBookCount = finishedBookCount,
+        calculatedAtEpochMillis = calculatedAtEpochMillis
+    )
+
+private fun statisticsSummaryDetail(statistics: ProfileTimeStats): String {
+    if (statistics.calculatedAtEpochMillis <= 0) {
+        return "Saved snapshot · waiting for the first completed calculation"
+    }
+
+    val formattedDate = Instant.ofEpochMilli(statistics.calculatedAtEpochMillis)
+        .atZone(ZoneId.systemDefault())
+        .format(StatisticsDateFormatter)
+    return "Movies, watched series episodes and games · updated $formattedDate"
 }
 
 private fun formatDuration(totalMinutes: Long): String {
