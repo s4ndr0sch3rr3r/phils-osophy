@@ -22,17 +22,20 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           path = Path("app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt")
           text = path.read_text(encoding="utf-8")
-          block = '''        TextButton(onClick = onBackClick) {
-              Text("← Back")
-          }
-
-          '''
-          if block not in text:
+          pattern = re.compile(
+              r'^        TextButton\(onClick = onBackClick\) \{\n'
+              r'            Text\("← Back"\)\n'
+              r'        \}\n\n',
+              flags=re.MULTILINE,
+          )
+          updated, count = pattern.subn("", text, count=1)
+          if count != 1:
               raise SystemExit("Top-level Books back-button block was not found")
-          path.write_text(text.replace(block, "", 1), encoding="utf-8")
+          path.write_text(updated, encoding="utf-8")
 
       - name: Commit the Books cleanup
         run: |
