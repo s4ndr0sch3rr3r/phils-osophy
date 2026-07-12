@@ -37,6 +37,9 @@ interface SavedSeriesDao {
     )
     fun observeStopped(): Flow<List<SavedSeriesEntity>>
 
+    @Query("SELECT * FROM saved_series WHERE id = :seriesId LIMIT 1")
+    suspend fun getById(seriesId: Int): SavedSeriesEntity?
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(series: SavedSeriesEntity)
 
