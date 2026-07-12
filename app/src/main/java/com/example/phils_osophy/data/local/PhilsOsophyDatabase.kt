@@ -11,9 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     entities = [
         SavedMovieEntity::class,
         SavedSeriesEntity::class,
-        WatchedEpisodeEntity::class
+        WatchedEpisodeEntity::class,
+        SavedGameEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -23,6 +24,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
     abstract fun savedSeriesDao(): SavedSeriesDao
 
     abstract fun watchedEpisodeDao(): WatchedEpisodeDao
+
+    abstract fun savedGameDao(): SavedGameDao
 
     companion object {
         @Volatile
@@ -100,6 +103,20 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration6To7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS saved_games (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "hoursPlayedMinutes INTEGER NOT NULL, " +
+                        "playerCount INTEGER NOT NULL DEFAULT 1, " +
+                        "isFinished INTEGER NOT NULL DEFAULT 0, " +
+                        "addedAtEpochMillis INTEGER NOT NULL DEFAULT 0)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -112,7 +129,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration2To3,
                         migration3To4,
                         migration4To5,
-                        migration5To6
+                        migration5To6,
+                        migration6To7
                     )
                     .build()
                     .also { database ->
