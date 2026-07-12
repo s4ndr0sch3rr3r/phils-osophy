@@ -115,7 +115,7 @@ fun EpisodeDetailScreen(
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
-                    contentDescription = loadedEpisode.name,
+                    contentDescription = loadedEpisode?.name ?: "Episode image",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
