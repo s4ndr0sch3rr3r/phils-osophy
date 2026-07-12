@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.SavedMovieEntity
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.data.remote.TmdbClient
 import kotlinx.coroutines.launch
@@ -50,9 +51,10 @@ private const val TMDB_POSTER_BASE_URL =
 
 @Composable
 fun MovieSearchScreen(
-    savedMovieIds: Set<Int>,
+    savedMovies: List<SavedMovieEntity>,
     onAddMovie: (MovieDto) -> Unit,
-    onOpenList: () -> Unit,
+    onMovieClick: (Int) -> Unit,
+    onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
     onBackClick: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -65,6 +67,9 @@ fun MovieSearchScreen(
         mutableStateOf<String?>(null)
     }
 
+    val savedMovieIds = savedMovies
+        .map { movie -> movie.id }
+        .toSet()
     val coroutineScope = rememberCoroutineScope()
 
     val searchMovies = {
@@ -112,13 +117,20 @@ fun MovieSearchScreen(
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement =
-                Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = query,
-                onValueChange = { query = it },
+                onValueChange = { newQuery ->
+                    query = newQuery
+
+                    if (newQuery.isBlank()) {
+                        hasSearched = false
+                        movies = emptyList()
+                        errorMessage = null
+                    }
+                },
                 modifier = Modifier.weight(1f),
                 label = {
                     Text("Search for a movie")
@@ -136,8 +148,7 @@ fun MovieSearchScreen(
 
             Button(
                 onClick = searchMovies,
-                enabled =
-                    query.isNotBlank() && !isLoading
+                enabled = query.isNotBlank() && !isLoading
             ) {
                 Text("Search")
             }
@@ -145,74 +156,70 @@ fun MovieSearchScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        ) {
-            when {
-                isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator()
+        if (!hasSearched) {
+            Text(
+                text = "My movie list",
+                style = MaterialTheme.typography.titleLarge
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            SavedMovieGrid(
+                movies = savedMovies,
+                onMovieClick = onMovieClick,
+                onFavoriteClick = onFavoriteClick,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
+                when {
+                    isLoading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
                     }
-                }
 
-                errorMessage != null -> {
-                    Text(
-                        text = errorMessage.orEmpty(),
-                        color =
-                            MaterialTheme.colorScheme.error
-                    )
-                }
+                    errorMessage != null -> {
+                        Text(
+                            text = errorMessage.orEmpty(),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
 
-                hasSearched && movies.isEmpty() -> {
-                    Text("No movies found.")
-                }
+                    movies.isEmpty() -> {
+                        Text("No movies found.")
+                    }
 
-                !hasSearched -> {
-                    Text(
-                        "Enter a movie title to begin."
-                    )
-                }
-
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement =
-                            Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(
-                            items = movies,
-                            key = { movie -> movie.id }
-                        ) { movie ->
-                            MovieResultCard(
-                                movie = movie,
-                                isAdded =
-                                    movie.id in savedMovieIds,
-                                onAddClick = {
-                                    onAddMovie(movie)
-                                }
-                            )
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = movies,
+                                key = { movie -> movie.id }
+                            ) { movie ->
+                                MovieResultCard(
+                                    movie = movie,
+                                    isAdded = movie.id in savedMovieIds,
+                                    onAddClick = {
+                                        onAddMovie(movie)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Button(
-            onClick = onOpenList,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-        ) {
-            Text(
-                "My movie list (${savedMovieIds.size})"
-            )
         }
     }
 }
@@ -244,53 +251,39 @@ private fun MovieResultCard(
             ) {
                 Text(
                     text = movie.title,
-                    style =
-                        MaterialTheme.typography.titleMedium
+                    style = MaterialTheme.typography.titleMedium
                 )
 
                 if (movie.releaseDate.isNotBlank()) {
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text =
-                            "Released: ${movie.releaseDate}",
-                        style =
-                            MaterialTheme.typography.bodySmall
+                        text = "Released: ${movie.releaseDate}",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
 
-                Spacer(
-                    modifier = Modifier.height(4.dp)
-                )
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Text(
-                    text =
-                        "Rating: %.1f / 10".format(
-                            movie.voteAverage
-                        ),
-                    style =
-                        MaterialTheme.typography.bodySmall
+                    text = "Rating: %.1f / 10".format(
+                        movie.voteAverage
+                    ),
+                    style = MaterialTheme.typography.bodySmall
                 )
 
                 if (movie.overview.isNotBlank()) {
-                    Spacer(
-                        modifier = Modifier.height(8.dp)
-                    )
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = movie.overview,
-                        style =
-                            MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
 
-                Spacer(
-                    modifier = Modifier.height(12.dp)
-                )
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Button(
                     onClick = onAddClick,
@@ -348,8 +341,7 @@ private fun MoviePoster(
                 .data(posterUrl)
                 .crossfade(true)
                 .build(),
-            contentDescription =
-                "${movie.title} poster",
+            contentDescription = "${movie.title} poster",
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop,
             onLoading = {
@@ -378,8 +370,7 @@ private fun MoviePoster(
                 Text(
                     text = "Poster unavailable",
                     modifier = Modifier.padding(8.dp),
-                    style =
-                        MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         }
