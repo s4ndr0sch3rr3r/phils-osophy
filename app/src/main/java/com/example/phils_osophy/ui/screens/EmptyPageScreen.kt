@@ -3,8 +3,8 @@ package com.example.phils_osophy.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,21 +22,25 @@ fun EmptyPageScreen(
         onBackClick()
     }
 
+    val showBackButton = title != "Explore" && title != "Profile"
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        TextButton(
-            onClick = onBackClick,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(top = 48.dp, start = 16.dp)
-        ) {
-            Text(
-                text = "← Retour",
-                color = Color.White
-            )
+        if (showBackButton) {
+            TextButton(
+                onClick = onBackClick,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(top = 48.dp, start = 16.dp)
+            ) {
+                Text(
+                    text = "← Retour",
+                    color = Color.White
+                )
+            }
         }
 
         Text(

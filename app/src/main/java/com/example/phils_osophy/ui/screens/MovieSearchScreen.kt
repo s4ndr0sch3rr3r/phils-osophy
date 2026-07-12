@@ -53,6 +53,7 @@ private const val TMDB_POSTER_BASE_URL =
 
 private val FavoriteColor = Color(0xFFE53935)
 
+@Suppress("UNUSED_PARAMETER")
 @Composable
 fun MovieSearchScreen(
     savedMovies: List<SavedMovieEntity>,
@@ -138,10 +139,6 @@ fun MovieSearchScreen(
             .navigationBarsPadding()
             .padding(16.dp)
     ) {
-        TextButton(onClick = onBackClick) {
-            Text("← Back")
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
