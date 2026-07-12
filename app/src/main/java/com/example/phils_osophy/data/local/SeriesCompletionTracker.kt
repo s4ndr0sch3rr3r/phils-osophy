@@ -33,6 +33,7 @@ class SeriesCompletionTracker(
                 seasonNumber = seasonNumber,
                 episodeNumber = episodeNumber
             )
+            moveFromFinishedToInProgressIfNeeded(seriesId)
         }
 
         synchronizeStatus(seriesId)
@@ -71,6 +72,7 @@ class SeriesCompletionTracker(
                 seriesId = seriesId,
                 seasonNumber = seasonNumber
             )
+            moveFromFinishedToInProgressIfNeeded(seriesId)
         }
 
         synchronizeStatus(seriesId)
@@ -103,6 +105,20 @@ class SeriesCompletionTracker(
         if (
             SeriesStatus.fromStorage(savedSeries.status) ==
             SeriesStatus.TO_WATCH
+        ) {
+            savedSeriesDao.updateStatus(
+                seriesId = seriesId,
+                status = SeriesStatus.IN_PROGRESS.name
+            )
+        }
+    }
+
+    private suspend fun moveFromFinishedToInProgressIfNeeded(seriesId: Int) {
+        val savedSeries = savedSeriesDao.getById(seriesId) ?: return
+
+        if (
+            SeriesStatus.fromStorage(savedSeries.status) ==
+            SeriesStatus.FINISHED
         ) {
             savedSeriesDao.updateStatus(
                 seriesId = seriesId,
