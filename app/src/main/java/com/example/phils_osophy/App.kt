@@ -9,7 +9,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
-import com.example.phils_osophy.data.local.toMovieDto
 import com.example.phils_osophy.data.local.toSavedMovieEntity
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.ui.components.AppScaffold
@@ -48,9 +47,6 @@ fun App() {
     val savedMovieEntities by savedMoviesFlow.collectAsState(
         initial = emptyList()
     )
-    val savedMovies = savedMovieEntities.map { entity ->
-        entity.toMovieDto()
-    }
     val coroutineScope = rememberCoroutineScope()
 
     fun goBackToMainMenu() {
@@ -93,14 +89,21 @@ fun App() {
 
             AppScreen.MoviesMenu -> {
                 MovieSearchScreen(
-                    savedMovieIds = savedMovies
-                        .map { movie -> movie.id }
-                        .toSet(),
+                    savedMovies = savedMovieEntities,
                     onAddMovie = { movie ->
                         pendingMovie = movie
                     },
-                    onOpenList = {
-                        currentScreen = AppScreen.MoviesList
+                    onMovieClick = { movieId ->
+                        selectedMovieId = movieId
+                        currentScreen = AppScreen.MovieDetail
+                    },
+                    onFavoriteClick = { movieId, isFavorite ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateFavorite(
+                                movieId = movieId,
+                                isFavorite = isFavorite
+                            )
+                        }
                     },
                     onBackClick = ::goBackToMainMenu
                 )
@@ -137,7 +140,7 @@ fun App() {
                     MovieDetailScreen(
                         movie = selectedMovie,
                         onBackClick = {
-                            currentScreen = AppScreen.MoviesList
+                            currentScreen = AppScreen.MoviesMenu
                         },
                         onFavoriteClick = { isFavorite ->
                             coroutineScope.launch {
@@ -151,7 +154,7 @@ fun App() {
                             coroutineScope.launch {
                                 savedMovieDao.deleteById(selectedMovie.id)
                                 selectedMovieId = null
-                                currentScreen = AppScreen.MoviesList
+                                currentScreen = AppScreen.MoviesMenu
                             }
                         }
                     )
@@ -159,7 +162,7 @@ fun App() {
                     EmptyPageScreen(
                         title = "Movie unavailable",
                         onBackClick = {
-                            currentScreen = AppScreen.MoviesList
+                            currentScreen = AppScreen.MoviesMenu
                         }
                     )
                 }
