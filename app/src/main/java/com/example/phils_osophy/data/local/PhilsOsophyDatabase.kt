@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedBookEntity::class,
         ProfileStatsCacheEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -203,6 +203,19 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration11To12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE saved_series ADD COLUMN note " +
+                        "TEXT NOT NULL DEFAULT ''"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_books ADD COLUMN note " +
+                        "TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -220,7 +233,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration7To8,
                         migration8To9,
                         migration9To10,
-                        migration10To11
+                        migration10To11,
+                        migration11To12
                     )
                     .build()
                     .also { database ->
