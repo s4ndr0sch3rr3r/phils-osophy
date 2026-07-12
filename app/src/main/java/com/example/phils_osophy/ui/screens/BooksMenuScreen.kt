@@ -217,6 +217,14 @@ fun BooksMenuScreen(
         onSaveReadingState = { book, status, progress ->
             updateBook(book, status, progress)
         },
+        onChangeRating = { bookKey, rating ->
+            coroutineScope.launch {
+                savedBookDao.updateRating(
+                    bookKey = bookKey,
+                    userRating = rating.coerceIn(0, 10)
+                )
+            }
+        },
         onRemoveBook = { bookKey ->
             coroutineScope.launch {
                 savedBookDao.deleteByKey(bookKey)
@@ -240,6 +248,7 @@ private fun BookLibraryScreen(
         status: BookStatus,
         progress: Int
     ) -> Unit,
+    onChangeRating: (bookKey: String, rating: Int) -> Unit,
     onRemoveBook: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
@@ -256,6 +265,9 @@ private fun BookLibraryScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingBook by remember { mutableStateOf<BookDto?>(null) }
     var managedBook by remember {
+        mutableStateOf<SavedBookEntity?>(null)
+    }
+    var ratingBook by remember {
         mutableStateOf<SavedBookEntity?>(null)
     }
 
@@ -511,12 +523,30 @@ private fun BookLibraryScreen(
                 onSaveReadingState(book, status, progress)
                 managedBook = null
             },
+            onChangeRating = {
+                ratingBook = book
+                managedBook = null
+            },
             onRemove = {
                 onRemoveBook(book.key)
                 managedBook = null
             },
             onCancel = {
                 managedBook = null
+            }
+        )
+    }
+
+    ratingBook?.let { book ->
+        UserRatingDialog(
+            title = "Rate ${book.title}",
+            initialRating = book.userRating,
+            onSave = { rating ->
+                onChangeRating(book.key, rating)
+                ratingBook = null
+            },
+            onCancel = {
+                ratingBook = null
             }
         )
     }
@@ -750,6 +780,7 @@ private fun BookAddDialog(
 private fun BookManageDialog(
     book: SavedBookEntity,
     onSave: (status: BookStatus, progress: Int) -> Unit,
+    onChangeRating: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -817,6 +848,15 @@ private fun BookManageDialog(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
+                TextButton(onClick = onChangeRating) {
+                    Text(
+                        if (book.userRating in 1..10) {
+                            "Change rating"
+                        } else {
+                            "Add rating"
+                        }
+                    )
+                }
                 TextButton(onClick = onRemove) {
                     Text(
                         text = "Remove book",
@@ -1030,6 +1070,10 @@ private fun BookDetailScreen(
             onSave = { status, progress ->
                 onSaveReadingState(status, progress)
                 showManageDialog = false
+            },
+            onChangeRating = {
+                showManageDialog = false
+                showRatingDialog = true
             },
             onRemove = {
                 onRemove()

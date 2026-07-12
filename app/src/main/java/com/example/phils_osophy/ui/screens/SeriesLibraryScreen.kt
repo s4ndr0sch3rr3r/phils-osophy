@@ -78,6 +78,7 @@ fun SeriesLibraryScreen(
     onSeriesClick: (Int) -> Unit,
     onStatusChange: (seriesId: Int, status: SeriesStatus) -> Unit,
     onFavoriteClick: (seriesId: Int, isFavorite: Boolean) -> Unit,
+    onChangeRating: (seriesId: Int, rating: Int) -> Unit,
     onRemoveSeries: (seriesId: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
@@ -94,6 +95,9 @@ fun SeriesLibraryScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingSeries by remember { mutableStateOf<SeriesDto?>(null) }
     var managedSeries by remember {
+        mutableStateOf<SavedSeriesEntity?>(null)
+    }
+    var ratingSeries by remember {
         mutableStateOf<SavedSeriesEntity?>(null)
     }
 
@@ -373,12 +377,30 @@ fun SeriesLibraryScreen(
                 )
                 managedSeries = null
             },
+            onChangeRating = {
+                ratingSeries = series
+                managedSeries = null
+            },
             onRemove = {
                 onRemoveSeries(series.id)
                 managedSeries = null
             },
             onCancel = {
                 managedSeries = null
+            }
+        )
+    }
+
+    ratingSeries?.let { series ->
+        UserRatingDialog(
+            title = "Rate ${series.name}",
+            initialRating = series.userRating,
+            onSave = { rating ->
+                onChangeRating(series.id, rating)
+                ratingSeries = null
+            },
+            onCancel = {
+                ratingSeries = null
             }
         )
     }
@@ -717,6 +739,7 @@ private fun LibraryAddDialog(
 private fun LibraryManageDialog(
     series: SavedSeriesEntity,
     onStatusChange: (SeriesStatus) -> Unit,
+    onChangeRating: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -738,6 +761,15 @@ private fun LibraryManageDialog(
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onChangeRating) {
+                    Text(
+                        if (series.userRating in 1..10) {
+                            "Change rating"
+                        } else {
+                            "Add rating"
+                        }
+                    )
+                }
                 TextButton(onClick = onRemove) {
                     Text(
                         text = "Remove series",
