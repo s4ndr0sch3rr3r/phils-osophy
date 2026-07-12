@@ -1,0 +1,31 @@
+name: Move alien to far right
+
+on:
+  push:
+    branches:
+      - agent/alien-far-right
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/alien-far-right
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/move_alien_right.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/example/phils_osophy/ui/components/AppScaffold.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/MovieSearchScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          git commit -m "Move alien profile button to far right"
+          git push
