@@ -9,6 +9,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
+import com.example.phils_osophy.data.local.WatchedEpisodeEntity
+import com.example.phils_osophy.data.local.WatchedEpisodeKey
 import com.example.phils_osophy.data.local.toSavedMovieEntity
 import com.example.phils_osophy.data.local.toSavedSeriesEntity
 import com.example.phils_osophy.data.remote.MovieDto
@@ -17,11 +19,14 @@ import com.example.phils_osophy.ui.components.BottomCategory
 import com.example.phils_osophy.ui.screens.AddMovieDialog
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
+import com.example.phils_osophy.ui.screens.EpisodeDetailScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
-import com.example.phils_osophy.ui.screens.SeriesMenuScreen
+import com.example.phils_osophy.ui.screens.SeriesDetailScreen
+import com.example.phils_osophy.ui.screens.SeriesLibraryScreen
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 @Composable
@@ -30,6 +35,15 @@ fun App() {
         mutableStateOf(AppScreen.MainMenu)
     }
     var selectedMovieId by remember {
+        mutableStateOf<Int?>(null)
+    }
+    var selectedSeriesId by remember {
+        mutableStateOf<Int?>(null)
+    }
+    var selectedSeasonNumber by remember {
+        mutableStateOf<Int?>(null)
+    }
+    var selectedEpisodeNumber by remember {
         mutableStateOf<Int?>(null)
     }
     var pendingMovie by remember {
@@ -45,6 +59,9 @@ fun App() {
     }
     val savedSeriesDao = remember(database) {
         database.savedSeriesDao()
+    }
+    val watchedEpisodeDao = remember(database) {
+        database.watchedEpisodeDao()
     }
 
     val savedMoviesFlow = remember(savedMovieDao) {
@@ -82,6 +99,40 @@ fun App() {
         initial = emptyList()
     )
 
+    val allSavedSeries = remember(
+        inProgressSeries,
+        finishedSeries,
+        toWatchSeries,
+        stoppedSeries
+    ) {
+        (
+            inProgressSeries +
+                finishedSeries +
+                toWatchSeries +
+                stoppedSeries
+            ).distinctBy { series -> series.id }
+    }
+
+    val watchedEpisodesFlow = remember(
+        watchedEpisodeDao,
+        selectedSeriesId
+    ) {
+        selectedSeriesId?.let { seriesId ->
+            watchedEpisodeDao.observeForSeries(seriesId)
+        } ?: flowOf<List<WatchedEpisodeEntity>>(emptyList())
+    }
+    val watchedEpisodeEntities by watchedEpisodesFlow.collectAsState(
+        initial = emptyList()
+    )
+    val watchedEpisodeKeys = watchedEpisodeEntities
+        .map { episode ->
+            WatchedEpisodeKey(
+                seasonNumber = episode.seasonNumber,
+                episodeNumber = episode.episodeNumber
+            )
+        }
+        .toSet()
+
     val coroutineScope = rememberCoroutineScope()
 
     fun goBackToMainMenu() {
@@ -92,11 +143,18 @@ fun App() {
         currentScreen = AppScreen.BooksMenu
     }
 
+    fun clearSelectedSeries() {
+        selectedSeriesId = null
+        selectedSeasonNumber = null
+        selectedEpisodeNumber = null
+    }
+
     AppScaffold(
         selectedCategory = currentScreen.toBottomCategory(),
         onCategoryClick = { category ->
             pendingMovie = null
             selectedMovieId = null
+            clearSelectedSeries()
             currentScreen = category.toAppScreen()
         }
     ) {
@@ -208,7 +266,7 @@ fun App() {
             }
 
             AppScreen.SeriesMenu -> {
-                SeriesMenuScreen(
+                SeriesLibraryScreen(
                     inProgressSeries = inProgressSeries,
                     finishedSeries = finishedSeries,
                     toWatchSeries = toWatchSeries,
@@ -219,6 +277,12 @@ fun App() {
                                 series.toSavedSeriesEntity(status = status)
                             )
                         }
+                    },
+                    onSeriesClick = { seriesId ->
+                        selectedSeriesId = seriesId
+                        selectedSeasonNumber = null
+                        selectedEpisodeNumber = null
+                        currentScreen = AppScreen.SeriesDetail
                     },
                     onStatusChange = { seriesId, status ->
                         coroutineScope.launch {
@@ -238,11 +302,128 @@ fun App() {
                     },
                     onRemoveSeries = { seriesId ->
                         coroutineScope.launch {
+                            watchedEpisodeDao.deleteForSeries(seriesId)
                             savedSeriesDao.deleteById(seriesId)
                         }
                     },
                     onBackClick = ::goBackToMainMenu
                 )
+            }
+
+            AppScreen.SeriesDetail -> {
+                val selectedSeries = allSavedSeries
+                    .firstOrNull { series ->
+                        series.id == selectedSeriesId
+                    }
+
+                if (selectedSeries != null) {
+                    SeriesDetailScreen(
+                        series = selectedSeries,
+                        watchedEpisodes = watchedEpisodeKeys,
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesMenu
+                        },
+                        onFavoriteClick = { isFavorite ->
+                            coroutineScope.launch {
+                                savedSeriesDao.updateFavorite(
+                                    seriesId = selectedSeries.id,
+                                    isFavorite = isFavorite
+                                )
+                            }
+                        },
+                        onEpisodeClick = { seasonNumber, episodeNumber ->
+                            selectedSeasonNumber = seasonNumber
+                            selectedEpisodeNumber = episodeNumber
+                            currentScreen = AppScreen.EpisodeDetail
+                        },
+                        onWatchedChange = {
+                                seasonNumber,
+                                episodeNumber,
+                                watched ->
+                            coroutineScope.launch {
+                                if (watched) {
+                                    watchedEpisodeDao.markWatched(
+                                        WatchedEpisodeEntity(
+                                            seriesId = selectedSeries.id,
+                                            seasonNumber = seasonNumber,
+                                            episodeNumber = episodeNumber
+                                        )
+                                    )
+                                } else {
+                                    watchedEpisodeDao.markUnwatched(
+                                        seriesId = selectedSeries.id,
+                                        seasonNumber = seasonNumber,
+                                        episodeNumber = episodeNumber
+                                    )
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    EmptyPageScreen(
+                        title = "Series unavailable",
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesMenu
+                        }
+                    )
+                }
+            }
+
+            AppScreen.EpisodeDetail -> {
+                val selectedSeries = allSavedSeries
+                    .firstOrNull { series ->
+                        series.id == selectedSeriesId
+                    }
+                val seasonNumber = selectedSeasonNumber
+                val episodeNumber = selectedEpisodeNumber
+
+                if (
+                    selectedSeries != null &&
+                    seasonNumber != null &&
+                    episodeNumber != null
+                ) {
+                    val episodeKey = WatchedEpisodeKey(
+                        seasonNumber = seasonNumber,
+                        episodeNumber = episodeNumber
+                    )
+
+                    EpisodeDetailScreen(
+                        seriesId = selectedSeries.id,
+                        seriesName = selectedSeries.name,
+                        seasonNumber = seasonNumber,
+                        episodeNumber = episodeNumber,
+                        isWatched = episodeKey in watchedEpisodeKeys,
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesDetail
+                        },
+                        onWatchedChange = { watched ->
+                            coroutineScope.launch {
+                                if (watched) {
+                                    watchedEpisodeDao.markWatched(
+                                        WatchedEpisodeEntity(
+                                            seriesId = selectedSeries.id,
+                                            seasonNumber = seasonNumber,
+                                            episodeNumber = episodeNumber
+                                        )
+                                    )
+                                } else {
+                                    watchedEpisodeDao.markUnwatched(
+                                        seriesId = selectedSeries.id,
+                                        seasonNumber = seasonNumber,
+                                        episodeNumber = episodeNumber
+                                    )
+                                }
+                            }
+                        }
+                    )
+                } else {
+                    EmptyPageScreen(
+                        title = "Episode unavailable",
+                        onBackClick = {
+                            currentScreen = AppScreen.SeriesMenu
+                        }
+                    )
+                }
             }
 
             AppScreen.Explore -> {
@@ -340,7 +521,9 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.MoviesList,
     AppScreen.MovieDetail -> BottomCategory.Movies
 
-    AppScreen.SeriesMenu -> BottomCategory.Series
+    AppScreen.SeriesMenu,
+    AppScreen.SeriesDetail,
+    AppScreen.EpisodeDetail -> BottomCategory.Series
 
     AppScreen.Explore -> BottomCategory.Explore
     AppScreen.Profile -> BottomCategory.Profile
