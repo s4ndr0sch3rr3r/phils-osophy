@@ -10,21 +10,35 @@ import com.example.phils_osophy.data.local.toSavedSeriesEntity
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.data.remote.SeriesDto
 import com.example.phils_osophy.data.remote.TmdbClient
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.io.InputStream
+import java.io.OutputStream
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.zip.ZipInputStream
+import java.util.zip.ZipException
+import java.util.zip.ZipFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private const val MAX_GDPR_BACKUP_BYTES = 128 * 1024 * 1024
+private const val SERIES_HISTORY_FILE = "tracking-prod-records-v2.csv"
+private const val MOVIE_HISTORY_FILE = "tracking-prod-records.csv"
+private const val MAX_GDPR_ARCHIVE_BYTES = 128L * 1024L * 1024L
 private const val MAX_GDPR_ENTRY_BYTES = 32 * 1024 * 1024
+
+private val RequiredHistoryFiles = setOf(
+    SERIES_HISTORY_FILE,
+    MOVIE_HISTORY_FILE
+)
+
+private val WatchedMovieActions = setOf(
+    "watch",
+    "rewatch_count"
+)
 
 object TvTimeGdprImporter {
 
@@ -32,8 +46,8 @@ object TvTimeGdprImporter {
         context: Context,
         uri: Uri
     ): TvTimeImportResult = withContext(Dispatchers.IO) {
-        val documents = readCsvDocuments(context, uri)
-        val parsed = parseTvTimeDocuments(documents)
+        val files = readRequiredHistoryFiles(context, uri)
+        val parsed = parseHistoryFiles(files)
 
         if (parsed.series.isEmpty() && parsed.movies.isEmpty()) {
             throw IllegalArgumentException(
@@ -51,50 +65,48 @@ object TvTimeGdprImporter {
         var importedMovieCount = 0
         val skippedTitles = mutableListOf<String>()
 
-        parsed.series.values
-            .filter { importedSeries -> importedSeries.episodes.isNotEmpty() }
-            .forEach { importedSeries ->
-                val tmdbSeries = findSeries(importedSeries.title)
-                if (tmdbSeries == null) {
-                    skippedTitles += importedSeries.title
-                    return@forEach
-                }
-
-                val progress = expandProgressToLatestEpisode(
-                    seriesId = tmdbSeries.id,
-                    explicitEpisodes = importedSeries.episodes
-                )
-                val status = if (progress.isComplete) {
-                    SeriesStatus.FINISHED
-                } else {
-                    SeriesStatus.IN_PROGRESS
-                }
-                val earliestWatchedAt = progress.episodes
-                    .minOfOrNull { episode -> episode.watchedAtEpochMillis }
-                    ?: System.currentTimeMillis()
-
-                val existing = seriesDao.getById(tmdbSeries.id)
-                if (existing == null) {
-                    seriesDao.insert(
-                        tmdbSeries.toSavedSeriesEntity(
-                            status = status,
-                            addedAtEpochMillis = earliestWatchedAt
-                        )
-                    )
-                } else {
-                    seriesDao.updateStatus(
-                        seriesId = tmdbSeries.id,
-                        status = status.name
-                    )
-                }
-
-                if (progress.episodes.isNotEmpty()) {
-                    watchedEpisodeDao.markWatched(progress.episodes)
-                }
-
-                importedSeriesCount += 1
-                importedEpisodeCount += progress.episodes.size
+        parsed.series.values.forEach { importedSeries ->
+            val tmdbSeries = findSeries(importedSeries.title)
+            if (tmdbSeries == null) {
+                skippedTitles += importedSeries.title
+                return@forEach
             }
+
+            val progress = expandProgressToLatestEpisode(
+                seriesId = tmdbSeries.id,
+                explicitEpisodes = importedSeries.episodes
+            )
+            val status = if (progress.isComplete) {
+                SeriesStatus.FINISHED
+            } else {
+                SeriesStatus.IN_PROGRESS
+            }
+            val earliestWatchedAt = progress.episodes
+                .minOfOrNull { episode -> episode.watchedAtEpochMillis }
+                ?: System.currentTimeMillis()
+
+            val existing = seriesDao.getById(tmdbSeries.id)
+            if (existing == null) {
+                seriesDao.insert(
+                    tmdbSeries.toSavedSeriesEntity(
+                        status = status,
+                        addedAtEpochMillis = earliestWatchedAt
+                    )
+                )
+            } else {
+                seriesDao.updateStatus(
+                    seriesId = tmdbSeries.id,
+                    status = status.name
+                )
+            }
+
+            if (progress.episodes.isNotEmpty()) {
+                watchedEpisodeDao.markWatched(progress.episodes)
+            }
+
+            importedSeriesCount += 1
+            importedEpisodeCount += progress.episodes.size
+        }
 
         parsed.movies.values.forEach { importedMovie ->
             val tmdbMovie = findMovie(importedMovie.title)
@@ -113,7 +125,7 @@ object TvTimeGdprImporter {
         }
 
         TvTimeImportResult(
-            filesRead = documents.size,
+            filesRead = files.size,
             seriesImported = importedSeriesCount,
             episodesImported = importedEpisodeCount,
             moviesImported = importedMovieCount,
@@ -122,29 +134,24 @@ object TvTimeGdprImporter {
     }
 }
 
-private data class CsvDocument(
-    val name: String,
-    val content: String
-)
-
-private data class EpisodeKey(
+private data class GdprEpisodeKey(
     val seasonNumber: Int,
     val episodeNumber: Int
 )
 
-private data class ImportedSeries(
+private data class GdprImportedSeries(
     val title: String,
-    val episodes: MutableMap<EpisodeKey, Long?> = linkedMapOf()
+    val episodes: MutableMap<GdprEpisodeKey, Long?> = linkedMapOf()
 )
 
-private data class ImportedMovie(
+private data class GdprImportedMovie(
     val title: String,
     var watchedAtEpochMillis: Long? = null
 )
 
-private class ParsedTvTimeBackup {
-    val series = linkedMapOf<String, ImportedSeries>()
-    val movies = linkedMapOf<String, ImportedMovie>()
+private class ParsedTvTimeHistory {
+    val series = linkedMapOf<String, GdprImportedSeries>()
+    val movies = linkedMapOf<String, GdprImportedMovie>()
 
     fun addEpisode(
         title: String,
@@ -152,24 +159,20 @@ private class ParsedTvTimeBackup {
         episodeNumber: Int,
         watchedAtEpochMillis: Long?
     ) {
-        if (
-            title.isBlank() ||
-            seasonNumber <= 0 ||
-            episodeNumber <= 0
-        ) {
+        if (title.isBlank() || seasonNumber <= 0 || episodeNumber <= 0) {
             return
         }
 
         val cleanTitle = cleanTitle(title)
-        val seriesEntry = series.getOrPut(normalizedTitle(cleanTitle)) {
-            ImportedSeries(title = cleanTitle)
+        val importedSeries = series.getOrPut(normalizedTitle(cleanTitle)) {
+            GdprImportedSeries(title = cleanTitle)
         }
-        val key = EpisodeKey(
+        val key = GdprEpisodeKey(
             seasonNumber = seasonNumber,
             episodeNumber = episodeNumber
         )
-        val existingTimestamp = seriesEntry.episodes[key]
-        seriesEntry.episodes[key] = when {
+        val existingTimestamp = importedSeries.episodes[key]
+        importedSeries.episodes[key] = when {
             existingTimestamp == null -> watchedAtEpochMillis
             watchedAtEpochMillis == null -> existingTimestamp
             else -> minOf(existingTimestamp, watchedAtEpochMillis)
@@ -185,14 +188,14 @@ private class ParsedTvTimeBackup {
         }
 
         val cleanTitle = cleanTitle(title)
-        val movie = movies.getOrPut(normalizedTitle(cleanTitle)) {
-            ImportedMovie(title = cleanTitle)
+        val importedMovie = movies.getOrPut(normalizedTitle(cleanTitle)) {
+            GdprImportedMovie(title = cleanTitle)
         }
-        movie.watchedAtEpochMillis = when {
-            movie.watchedAtEpochMillis == null -> watchedAtEpochMillis
-            watchedAtEpochMillis == null -> movie.watchedAtEpochMillis
+        importedMovie.watchedAtEpochMillis = when {
+            importedMovie.watchedAtEpochMillis == null -> watchedAtEpochMillis
+            watchedAtEpochMillis == null -> importedMovie.watchedAtEpochMillis
             else -> minOf(
-                movie.watchedAtEpochMillis!!,
+                importedMovie.watchedAtEpochMillis!!,
                 watchedAtEpochMillis
             )
         }
@@ -204,148 +207,123 @@ private data class ExpandedProgress(
     val isComplete: Boolean
 )
 
-private fun readCsvDocuments(
+private fun readRequiredHistoryFiles(
     context: Context,
     uri: Uri
-): List<CsvDocument> {
-    val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
-        input.readLimited(MAX_GDPR_BACKUP_BYTES)
-    } ?: throw IllegalArgumentException("The selected file could not be opened.")
+): Map<String, String> {
+    val temporaryArchive = File.createTempFile(
+        "tv-time-gdpr-",
+        ".zip",
+        context.cacheDir
+    )
 
-    val isZip = bytes.size >= 4 &&
-        bytes[0] == 0x50.toByte() &&
-        bytes[1] == 0x4B.toByte()
-
-    if (!isZip) {
-        throw IllegalArgumentException(
-            "Select the TV Time file named gdpr-data.zip."
-        )
-    }
-
-    val documents = mutableListOf<CsvDocument>()
-    ZipInputStream(ByteArrayInputStream(bytes)).use { zipInput ->
-        var entry = zipInput.nextEntry
-        while (entry != null) {
-            if (
-                !entry.isDirectory &&
-                entry.name.lowercase(Locale.ROOT).endsWith(".csv")
-            ) {
-                val content = zipInput
-                    .readLimited(MAX_GDPR_ENTRY_BYTES)
-                    .toString(Charsets.UTF_8)
-                documents += CsvDocument(
-                    name = entry.name.substringAfterLast('/'),
-                    content = content
+    try {
+        val input = context.contentResolver.openInputStream(uri)
+            ?: throw IllegalArgumentException("The selected file could not be opened.")
+        input.use { source ->
+            temporaryArchive.outputStream().use { destination ->
+                source.copyLimitedTo(
+                    destination = destination,
+                    maxBytes = MAX_GDPR_ARCHIVE_BYTES
                 )
             }
-            zipInput.closeEntry()
-            entry = zipInput.nextEntry
         }
-    }
 
-    if (documents.isEmpty()) {
-        throw IllegalArgumentException(
-            "gdpr-data.zip does not contain readable TV Time CSV files."
-        )
-    }
+        return ZipFile(temporaryArchive).use { zipFile ->
+            val entriesByName = zipFile.entries().asSequence()
+                .filterNot { entry -> entry.isDirectory }
+                .associateBy { entry ->
+                    entry.name
+                        .substringAfterLast('/')
+                        .lowercase(Locale.ROOT)
+                }
 
-    return documents
+            val missingFiles = RequiredHistoryFiles - entriesByName.keys
+            if (missingFiles.isNotEmpty()) {
+                throw IllegalArgumentException(
+                    "gdpr-data.zip is missing: " +
+                        missingFiles.sorted().joinToString() +
+                        "."
+                )
+            }
+
+            RequiredHistoryFiles.associateWith { fileName ->
+                val entry = entriesByName.getValue(fileName)
+                zipFile.getInputStream(entry).use { entryInput ->
+                    entryInput
+                        .readLimited(MAX_GDPR_ENTRY_BYTES)
+                        .toString(Charsets.UTF_8)
+                }
+            }
+        }
+    } catch (_: ZipException) {
+        throw IllegalArgumentException("Select the TV Time file named gdpr-data.zip.")
+    } finally {
+        temporaryArchive.delete()
+    }
 }
 
-private fun parseTvTimeDocuments(
-    documents: List<CsvDocument>
-): ParsedTvTimeBackup {
-    val parsed = ParsedTvTimeBackup()
+private fun parseHistoryFiles(
+    files: Map<String, String>
+): ParsedTvTimeHistory {
+    val parsed = ParsedTvTimeHistory()
 
-    documents.forEach { document ->
-        val rows = parseCsv(document.content)
-        rows.forEach { row ->
-            val title = firstValue(
-                row,
-                "tvshowname",
-                "seriesname",
-                "showname"
-            )
-            val seasonNumber = firstInt(
-                row,
-                "episodeseasonnumber",
-                "seasonnumber",
-                "sno"
-            )
-            val episodeNumber = firstInt(
-                row,
-                "episodenumber",
-                "epno"
-            )
+    parseCsv(files.getValue(SERIES_HISTORY_FILE)).forEach { row ->
+        val watchMarker = listOfNotNull(
+            row["gsi"],
+            row["key"]
+        ).joinToString(" ").lowercase(Locale.ROOT)
+        val isWatchedEpisode = watchMarker.contains("watch-episode") ||
+            watchMarker.contains("rewatch-episode")
 
-            val watchMarker = firstValue(
-                row,
-                "gsi",
-                "key",
-                "typeuuidn"
-            )?.lowercase(Locale.ROOT).orEmpty()
-            val isWatchedEpisodeRow =
-                document.name.equals(
-                    "seen_episode.csv",
-                    ignoreCase = true
-                ) ||
-                    document.name.equals(
-                        "seen_episode_latest.csv",
-                        ignoreCase = true
-                    ) ||
-                    document.name.equals(
-                        "tracking-prod-records-v2.csv",
-                        ignoreCase = true
-                    ) ||
-                    watchMarker.contains("watch-episode") ||
-                    watchMarker.contains("rewatch-episode")
-
-            if (
-                isWatchedEpisodeRow &&
-                !title.isNullOrBlank() &&
-                seasonNumber != null &&
-                episodeNumber != null
-            ) {
-                parsed.addEpisode(
-                    title = title,
-                    seasonNumber = seasonNumber,
-                    episodeNumber = episodeNumber,
-                    watchedAtEpochMillis = firstTimestamp(
-                        row,
-                        "createdat",
-                        "updatedat"
-                    )
-                )
-            }
-
-            val entityType = firstValue(
-                row,
-                "entitytype"
-            )?.lowercase(Locale.ROOT)
-            val movieAction = firstValue(
-                row,
-                "type"
-            )?.lowercase(Locale.ROOT)
-            val movieTitle = firstValue(
-                row,
-                "moviename",
-                "movietitle"
-            )
-            val isWatchedMovie =
-                entityType == "movie" &&
-                    movieAction.orEmpty() in setOf("watch", "rewatch_count")
-
-            if (isWatchedMovie && !movieTitle.isNullOrBlank()) {
-                parsed.addMovie(
-                    title = movieTitle,
-                    watchedAtEpochMillis = firstTimestamp(
-                        row,
-                        "createdat",
-                        "updatedat"
-                    )
-                )
-            }
+        if (!isWatchedEpisode) {
+            return@forEach
         }
+
+        val title = firstValue(row, "seriesname") ?: return@forEach
+        val seasonNumber = firstInt(
+            row,
+            "seasonnumber",
+            "sno"
+        ) ?: return@forEach
+        val episodeNumber = firstInt(
+            row,
+            "episodenumber",
+            "epno"
+        ) ?: return@forEach
+
+        parsed.addEpisode(
+            title = title,
+            seasonNumber = seasonNumber,
+            episodeNumber = episodeNumber,
+            watchedAtEpochMillis = firstTimestamp(
+                row,
+                "createdat",
+                "updatedat"
+            )
+        )
+    }
+
+    parseCsv(files.getValue(MOVIE_HISTORY_FILE)).forEach { row ->
+        val entityType = firstValue(row, "entitytype")
+            ?.lowercase(Locale.ROOT)
+        val action = firstValue(row, "type")
+            ?.lowercase(Locale.ROOT)
+            .orEmpty()
+
+        if (entityType != "movie" || action !in WatchedMovieActions) {
+            return@forEach
+        }
+
+        val title = firstValue(row, "moviename") ?: return@forEach
+        parsed.addMovie(
+            title = title,
+            watchedAtEpochMillis = firstTimestamp(
+                row,
+                "createdat",
+                "updatedat"
+            )
+        )
     }
 
     return parsed
@@ -359,9 +337,7 @@ private fun parseCsv(content: String): List<Map<String, String>> {
         return emptyList()
     }
 
-    val headers = parseCsvLine(lines.first())
-        .map(::normalizedKey)
-
+    val headers = parseCsvLine(lines.first()).map(::normalizedKey)
     return lines.drop(1).mapNotNull { line ->
         val values = parseCsvLine(line)
         if (values.isEmpty()) {
@@ -394,10 +370,7 @@ private fun parseCsvLine(line: String): List<String> {
                 index += 1
             }
 
-            character == '"' -> {
-                insideQuotes = !insideQuotes
-            }
-
+            character == '"' -> insideQuotes = !insideQuotes
             character == ',' && !insideQuotes -> {
                 values += current.toString()
                 current.clear()
@@ -414,10 +387,10 @@ private fun parseCsvLine(line: String): List<String> {
 
 private suspend fun expandProgressToLatestEpisode(
     seriesId: Int,
-    explicitEpisodes: Map<EpisodeKey, Long?>
+    explicitEpisodes: Map<GdprEpisodeKey, Long?>
 ): ExpandedProgress {
     val latestKey = explicitEpisodes.keys.maxWithOrNull(
-        compareBy<EpisodeKey> { key -> key.seasonNumber }
+        compareBy<GdprEpisodeKey> { key -> key.seasonNumber }
             .thenBy { key -> key.episodeNumber }
     ) ?: return ExpandedProgress(
         episodes = emptyList(),
@@ -440,19 +413,20 @@ private suspend fun expandProgressToLatestEpisode(
         }
         ?.forEach { season ->
             val lastEpisode = when {
-                season.seasonNumber < latestKey.seasonNumber ->
+                season.seasonNumber < latestKey.seasonNumber -> {
                     season.episodeCount
-                season.episodeCount > 0 ->
-                    minOf(
-                        latestKey.episodeNumber,
-                        season.episodeCount
-                    )
+                }
+
+                season.episodeCount > 0 -> {
+                    minOf(latestKey.episodeNumber, season.episodeCount)
+                }
+
                 else -> latestKey.episodeNumber
             }
 
             if (lastEpisode > 0) {
                 (1..lastEpisode).forEach { episodeNumber ->
-                    expandedKeys += EpisodeKey(
+                    expandedKeys += GdprEpisodeKey(
                         seasonNumber = season.seasonNumber,
                         episodeNumber = episodeNumber
                     )
@@ -460,24 +434,23 @@ private suspend fun expandProgressToLatestEpisode(
             }
         }
 
-    val isComplete = details?.seasons
+    val knownSeasons = details?.seasons
         ?.filter { season ->
-            season.seasonNumber > 0 &&
-                season.episodeCount > 0
+            season.seasonNumber > 0 && season.episodeCount > 0
         }
-        ?.takeIf { seasons -> seasons.isNotEmpty() }
-        ?.all { season ->
-            (1..season.episodeCount).all { episodeNumber ->
-                EpisodeKey(
-                    seasonNumber = season.seasonNumber,
-                    episodeNumber = episodeNumber
-                ) in expandedKeys
-            }
-        } ?: false
+        .orEmpty()
+    val isComplete = knownSeasons.isNotEmpty() && knownSeasons.all { season ->
+        (1..season.episodeCount).all { episodeNumber ->
+            GdprEpisodeKey(
+                seasonNumber = season.seasonNumber,
+                episodeNumber = episodeNumber
+            ) in expandedKeys
+        }
+    }
 
     val watchedEpisodes = expandedKeys
         .sortedWith(
-            compareBy<EpisodeKey> { key -> key.seasonNumber }
+            compareBy<GdprEpisodeKey> { key -> key.seasonNumber }
                 .thenBy { key -> key.episodeNumber }
         )
         .map { key ->
@@ -564,6 +537,29 @@ private fun firstTimestamp(
     return null
 }
 
+private fun InputStream.copyLimitedTo(
+    destination: OutputStream,
+    maxBytes: Long
+) {
+    val buffer = ByteArray(8 * 1024)
+    var total = 0L
+
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) {
+            break
+        }
+
+        total += read
+        if (total > maxBytes) {
+            throw IllegalArgumentException(
+                "The selected gdpr-data.zip file is too large."
+            )
+        }
+        destination.write(buffer, 0, read)
+    }
+}
+
 private fun InputStream.readLimited(maxBytes: Int): ByteArray {
     val output = ByteArrayOutputStream()
     val buffer = ByteArray(8 * 1024)
@@ -578,7 +574,7 @@ private fun InputStream.readLimited(maxBytes: Int): ByteArray {
         total += read
         if (total > maxBytes) {
             throw IllegalArgumentException(
-                "The selected gdpr-data.zip file is too large."
+                "A required TV Time history file is too large."
             )
         }
         output.write(buffer, 0, read)
