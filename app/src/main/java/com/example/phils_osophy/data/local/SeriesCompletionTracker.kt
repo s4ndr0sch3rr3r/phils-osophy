@@ -64,15 +64,17 @@ class SeriesCompletionTracker(
     suspend fun markAllEpisodesWatched(seriesId: Int) {
         val episodeKeys = loadExpectedEpisodes(seriesId) ?: return
 
-        watchedEpisodeDao.markWatched(
-            episodeKeys.map { key ->
-                WatchedEpisodeEntity(
-                    seriesId = seriesId,
-                    seasonNumber = key.seasonNumber,
-                    episodeNumber = key.episodeNumber
-                )
-            }
-        )
+        if (episodeKeys.isNotEmpty()) {
+            watchedEpisodeDao.markWatched(
+                episodeKeys.map { key ->
+                    WatchedEpisodeEntity(
+                        seriesId = seriesId,
+                        seasonNumber = key.seasonNumber,
+                        episodeNumber = key.episodeNumber
+                    )
+                }
+            )
+        }
 
         savedSeriesDao.updateStatus(
             seriesId = seriesId,
