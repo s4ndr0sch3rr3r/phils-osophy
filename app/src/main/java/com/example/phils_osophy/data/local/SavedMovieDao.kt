@@ -28,6 +28,16 @@ interface SavedMovieDao {
         isFavorite: Boolean
     )
 
+    @Query(
+        "UPDATE saved_movies " +
+            "SET userRating = :userRating " +
+            "WHERE id = :movieId"
+    )
+    suspend fun updateRating(
+        movieId: Int,
+        userRating: Int
+    )
+
     @Query("DELETE FROM saved_movies WHERE id = :movieId")
     suspend fun deleteById(movieId: Int)
 }
