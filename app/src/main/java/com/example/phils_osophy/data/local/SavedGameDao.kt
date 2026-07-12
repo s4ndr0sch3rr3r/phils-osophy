@@ -17,4 +17,9 @@ interface SavedGameDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(game: SavedGameEntity)
+
+    @Query(
+        "UPDATE saved_games SET userRating = :userRating WHERE id = :gameId"
+    )
+    suspend fun updateRating(gameId: Long, userRating: Int)
 }

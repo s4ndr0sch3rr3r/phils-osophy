@@ -63,6 +63,11 @@ interface SavedSeriesDao {
         isFavorite: Boolean
     )
 
+    @Query(
+        "UPDATE saved_series SET userRating = :userRating WHERE id = :seriesId"
+    )
+    suspend fun updateRating(seriesId: Int, userRating: Int)
+
     @Query("DELETE FROM saved_series WHERE id = :seriesId")
     suspend fun deleteById(seriesId: Int)
 }

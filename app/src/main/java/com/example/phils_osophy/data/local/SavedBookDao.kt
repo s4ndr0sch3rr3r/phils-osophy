@@ -70,6 +70,11 @@ interface SavedBookDao {
         isFavorite: Boolean
     )
 
+    @Query(
+        "UPDATE saved_books SET userRating = :userRating WHERE `key` = :bookKey"
+    )
+    suspend fun updateRating(bookKey: String, userRating: Int)
+
     @Query("DELETE FROM saved_books WHERE `key` = :bookKey")
     suspend fun deleteByKey(bookKey: String)
 }

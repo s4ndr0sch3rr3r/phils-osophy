@@ -172,6 +172,14 @@ fun BooksMenuScreen(
                 onSaveReadingState = { status, progress ->
                     updateBook(selectedBook, status, progress)
                 },
+                onChangeRating = { rating ->
+                    coroutineScope.launch {
+                        savedBookDao.updateRating(
+                            bookKey = selectedBook.key,
+                            userRating = rating.coerceIn(0, 10)
+                        )
+                    }
+                },
                 onRemove = {
                     coroutineScope.launch {
                         savedBookDao.deleteByKey(selectedBook.key)
@@ -615,6 +623,12 @@ private fun SavedBookCard(
                 },
                 fontSize = 26.sp
             )
+            UserRatingBadge(
+                rating = book.userRating,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+            )
             Text(
                 text = "•••",
                 modifier = Modifier
@@ -859,10 +873,14 @@ private fun BookDetailScreen(
     onBackClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
     onSaveReadingState: (status: BookStatus, progress: Int) -> Unit,
+    onChangeRating: (Int) -> Unit,
     onRemove: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
     var showManageDialog by remember {
+        mutableStateOf(false)
+    }
+    var showRatingDialog by remember(book.key) {
         mutableStateOf(false)
     }
 
@@ -885,6 +903,9 @@ private fun BookDetailScreen(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
+            TextButton(onClick = { showRatingDialog = true }) {
+                Text(if (book.userRating in 1..10) "${book.userRating}/10" else "Rate")
+            }
             TextButton(
                 onClick = {
                     onFavoriteClick(!book.isFavorite)
@@ -1071,6 +1092,19 @@ private fun DetailLine(
     }
 }
 
+
+    if (showRatingDialog) {
+        UserRatingDialog(
+            title = "Rate ${book.title}",
+            initialRating = book.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                showRatingDialog = false
+            },
+            onCancel = { showRatingDialog = false }
+        )
+    }
+}
 @Composable
 private fun BookCover(
     coverId: Int?,
