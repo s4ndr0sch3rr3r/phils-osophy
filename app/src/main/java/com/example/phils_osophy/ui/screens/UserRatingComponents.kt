@@ -39,19 +39,23 @@ fun BoxScope.UserRatingBadge(
     if (rating !in 1..10) return
 
     Box(
-        modifier = modifier
-            .align(Alignment.TopEnd)
-            .size(30.dp)
-            .clip(CircleShape)
-            .background(UserRatingBadgeColor),
+        modifier = Modifier.align(Alignment.TopEnd),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = rating.toString(),
-            color = Color.White,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold
-        )
+        Box(
+            modifier = modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(UserRatingBadgeColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = rating.toString(),
+                color = Color.White,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
