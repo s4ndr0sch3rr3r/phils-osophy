@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# One-shot branch repair, removed after execution.
 root = Path(__file__).resolve().parents[2]
 path = root / "app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt"
 text = path.read_text(encoding="utf-8")
