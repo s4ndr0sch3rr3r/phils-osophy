@@ -106,7 +106,7 @@ fun SavedMovieGrid(
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(
             items = movies,
@@ -145,102 +145,118 @@ private fun MoviePosterTile(
         mutableStateOf(false)
     }
 
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(2f / 3f)
-    ) {
-        Box(
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            onClick = onClick,
             modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .aspectRatio(2f / 3f)
         ) {
-            if (posterUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(posterUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "${movie.title} poster",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                    onLoading = {
-                        isLoaded = false
-                        hasError = false
-                    },
-                    onSuccess = {
-                        isLoaded = true
-                        hasError = false
-                    },
-                    onError = {
-                        isLoaded = false
-                        hasError = true
-                    }
-                )
-            }
-
-            if (posterUrl == null || !isLoaded || hasError) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.76f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = movie.title,
-                        modifier = Modifier.padding(10.dp),
-                        color = Color.White,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(5.dp)
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.62f))
-                    .clickable(onClick = onFavoriteClick),
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = if (movie.isFavorite) "♥" else "♡",
-                    color = if (movie.isFavorite) {
-                        FavoriteColor
-                    } else {
-                        Color.White
-                    },
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
+                if (posterUrl != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(posterUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "${movie.title} poster",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onLoading = {
+                            isLoaded = false
+                            hasError = false
+                        },
+                        onSuccess = {
+                            isLoaded = true
+                            hasError = false
+                        },
+                        onError = {
+                            isLoaded = false
+                            hasError = true
+                        }
+                    )
+                }
 
-            if (movie.userRating in 1..10) {
+                if (posterUrl == null || !isLoaded || hasError) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.76f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = movie.title,
+                            modifier = Modifier.padding(10.dp),
+                            color = Color.White,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center,
+                            maxLines = 4,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(30.dp)
+                        .align(Alignment.TopStart)
+                        .padding(5.dp)
+                        .size(34.dp)
                         .clip(CircleShape)
-                        .background(RatingBadgeColor),
+                        .background(Color.Black.copy(alpha = 0.62f))
+                        .clickable(onClick = onFavoriteClick),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = movie.userRating.toString(),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
+                        text = if (movie.isFavorite) "♥" else "♡",
+                        color = if (movie.isFavorite) {
+                            FavoriteColor
+                        } else {
+                            Color.White
+                        },
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                if (movie.userRating in 1..10) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(30.dp)
+                            .clip(CircleShape)
+                            .background(RatingBadgeColor),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = movie.userRating.toString(),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
         }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = movie.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp),
+            style = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                lineHeight = 16.sp
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
