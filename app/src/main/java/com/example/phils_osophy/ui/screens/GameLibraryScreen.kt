@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -29,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,18 +40,36 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.example.phils_osophy.BuildConfig
 import com.example.phils_osophy.data.local.SavedGameEntity
+import com.example.phils_osophy.data.remote.RawgClient
+import com.example.phils_osophy.data.remote.RawgGameDetailsDto
+import com.example.phils_osophy.ui.util.formatStoredDate
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 private val FinishedGreen = Color(0xFF2E7D32)
 private val UnfinishedGrey = Color(0xFF9E9E9E)
 private val HoursPattern = Regex(
     pattern = """^\s*(\d+):([0-5]\d)h?\s*$""",
     option = RegexOption.IGNORE_CASE
+)
+private val GameReleaseDateFormatter = DateTimeFormatter.ofPattern(
+    "MMMM d, yyyy",
+    Locale.ENGLISH
 )
 
 @Composable
@@ -65,8 +86,31 @@ fun GameLibraryScreen(
     var showAddDialog by remember {
         mutableStateOf(false)
     }
-    var expandedGameId by remember {
+    var selectedGameId by remember {
         mutableStateOf<Long?>(null)
+    }
+
+    val selectedGame = games.firstOrNull { game ->
+        game.id == selectedGameId
+    }
+
+    if (selectedGameId != null) {
+        if (selectedGame != null) {
+            GameDetailContent(
+                game = selectedGame,
+                onBackClick = {
+                    selectedGameId = null
+                }
+            )
+        } else {
+            EmptyPageScreen(
+                title = "Game unavailable",
+                onBackClick = {
+                    selectedGameId = null
+                }
+            )
+        }
+        return
     }
 
     BackHandler(onBack = onBackClick)
@@ -147,13 +191,8 @@ fun GameLibraryScreen(
                 ) { game ->
                     GameListItem(
                         game = game,
-                        isExpanded = game.id == expandedGameId,
                         onClick = {
-                            expandedGameId = if (expandedGameId == game.id) {
-                                null
-                            } else {
-                                game.id
-                            }
+                            selectedGameId = game.id
                         }
                     )
                 }
@@ -182,7 +221,6 @@ fun GameLibraryScreen(
 @Composable
 private fun GameListItem(
     game: SavedGameEntity,
-    isExpanded: Boolean,
     onClick: () -> Unit
 ) {
     Card(
@@ -190,59 +228,166 @@ private fun GameListItem(
             .fillMaxWidth()
             .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            FinishedTick(
+                isFinished = game.isFinished,
+                isInteractive = false
+            )
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 12.dp)
             ) {
-                FinishedTick(
-                    isFinished = game.isFinished,
-                    isInteractive = false
+                Text(
+                    text = game.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 12.dp)
-                ) {
-                    Text(
-                        text = game.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Text(
-                        text = "${formatHours(game.hoursPlayedMinutes)} · " +
-                            playerLabel(game.playerCount),
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-
                 Text(
-                    text = if (isExpanded) "⌃" else "⌄",
-                    style = MaterialTheme.typography.titleLarge
+                    text = "${formatHours(game.hoursPlayedMinutes)} · " +
+                        playerLabel(game.playerCount),
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
 
-            if (isExpanded) {
-                Spacer(modifier = Modifier.height(14.dp))
-                HorizontalDivider()
-                Spacer(modifier = Modifier.height(14.dp))
+            Text(
+                text = "›",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        }
+    }
+}
 
-                GameDetailRow(
-                    label = "Name",
-                    value = game.name
+@Composable
+private fun GameDetailContent(
+    game: SavedGameEntity,
+    onBackClick: () -> Unit
+) {
+    BackHandler(onBack = onBackClick)
+
+    val apiKey = BuildConfig.RAWG_API_KEY.trim()
+    var rawgDetails by remember(game.id) {
+        mutableStateOf<RawgGameDetailsDto?>(null)
+    }
+    var isLoading by remember(game.id) {
+        mutableStateOf(apiKey.isNotBlank())
+    }
+    var remoteError by remember(game.id) {
+        mutableStateOf<String?>(null)
+    }
+
+    LaunchedEffect(game.id, game.name, apiKey) {
+        rawgDetails = null
+        remoteError = null
+
+        if (apiKey.isBlank()) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+
+        isLoading = true
+
+        try {
+            val searchResults = RawgClient.api.searchGames(
+                apiKey = apiKey,
+                query = game.name
+            ).results
+            val match = searchResults.firstOrNull { result ->
+                result.name.equals(game.name, ignoreCase = true)
+            } ?: searchResults.firstOrNull()
+
+            if (match == null) {
+                remoteError = "No matching game was found in RAWG."
+            } else {
+                rawgDetails = RawgClient.api.getGameDetails(
+                    gameId = match.id,
+                    apiKey = apiKey
                 )
-                GameDetailRow(
-                    label = "Hours played",
-                    value = formatHours(game.hoursPlayedMinutes)
+            }
+        } catch (exception: Exception) {
+            remoteError = exception.localizedMessage
+                ?: "Game information could not be loaded."
+        } finally {
+            isLoading = false
+        }
+    }
+
+    val uriHandler = LocalUriHandler.current
+    val remoteTitle = rawgDetails
+        ?.name
+        ?.takeIf { name -> name.isNotBlank() }
+        ?: game.name
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(onClick = onBackClick) {
+                Text("← Back")
+            }
+
+            Text(
+                text = "Game details",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                bottom = 32.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            item {
+                GameHero(
+                    imageUrl = rawgDetails?.backgroundImage,
+                    title = remoteTitle
                 )
-                GameDetailRow(
-                    label = "Game type",
-                    value = playerLabel(game.playerCount)
+            }
+
+            item {
+                Text(
+                    text = remoteTitle,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
                 )
+            }
+
+            item {
+                HorizontalDivider()
+            }
+
+            item {
+                Text(
+                    text = "My game",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            item {
                 GameDetailRow(
                     label = "Status",
                     value = if (game.isFinished) {
@@ -252,6 +397,229 @@ private fun GameListItem(
                     }
                 )
             }
+
+            item {
+                GameDetailRow(
+                    label = "Hours played",
+                    value = formatHours(game.hoursPlayedMinutes)
+                )
+            }
+
+            item {
+                GameDetailRow(
+                    label = "Game type",
+                    value = playerLabel(game.playerCount)
+                )
+            }
+
+            item {
+                GameDetailRow(
+                    label = "Date added",
+                    value = formatStoredDate(game.addedAtEpochMillis)
+                )
+            }
+
+            item {
+                HorizontalDivider()
+            }
+
+            item {
+                Text(
+                    text = "Game information",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            when {
+                isLoading -> {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(96.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                }
+
+                apiKey.isBlank() -> {
+                    item {
+                        Text(
+                            text = "Add RAWG_API_KEY to local.properties " +
+                                "to load cover art, release information, " +
+                                "platforms, genres, ratings and description.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                remoteError != null -> {
+                    item {
+                        Text(
+                            text = remoteError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+
+                rawgDetails != null -> {
+                    val details = rawgDetails!!
+
+                    details.released
+                        ?.takeIf { released -> released.isNotBlank() }
+                        ?.let { released ->
+                            item {
+                                GameDetailRow(
+                                    label = "Release date",
+                                    value = formatGameReleaseDate(released)
+                                )
+                            }
+                        }
+
+                    joinedNames(details.platforms.map { entry ->
+                        entry.platform.name
+                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
+                        item {
+                            GameDetailRow(
+                                label = "Platforms",
+                                value = value
+                            )
+                        }
+                    }
+
+                    joinedNames(details.genres.map { genre ->
+                        genre.name
+                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
+                        item {
+                            GameDetailRow(
+                                label = "Genres",
+                                value = value
+                            )
+                        }
+                    }
+
+                    joinedNames(details.developers.map { developer ->
+                        developer.name
+                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
+                        item {
+                            GameDetailRow(
+                                label = "Developer",
+                                value = value
+                            )
+                        }
+                    }
+
+                    joinedNames(details.publishers.map { publisher ->
+                        publisher.name
+                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
+                        item {
+                            GameDetailRow(
+                                label = "Publisher",
+                                value = value
+                            )
+                        }
+                    }
+
+                    details.ageRating
+                        ?.name
+                        ?.takeIf { rating -> rating.isNotBlank() }
+                        ?.let { rating ->
+                            item {
+                                GameDetailRow(
+                                    label = "Age rating",
+                                    value = rating
+                                )
+                            }
+                        }
+
+                    details.metacritic?.let { metacritic ->
+                        item {
+                            GameDetailRow(
+                                label = "Metacritic",
+                                value = metacritic.toString()
+                            )
+                        }
+                    }
+
+                    if (details.rating > 0.0) {
+                        item {
+                            GameDetailRow(
+                                label = "RAWG rating",
+                                value = java.lang.String.format(
+                                    Locale.ENGLISH,
+                                    "%.1f / 5",
+                                    details.rating
+                                )
+                            )
+                        }
+                    }
+
+                    if (details.playtime > 0) {
+                        item {
+                            GameDetailRow(
+                                label = "Average playtime",
+                                value = "${details.playtime} h"
+                            )
+                        }
+                    }
+
+                    if (details.description.isNotBlank()) {
+                        item {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = details.description,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+
+                    item {
+                        TextButton(
+                            onClick = {
+                                uriHandler.openUri("https://rawg.io")
+                            }
+                        ) {
+                            Text("Game data provided by RAWG")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameHero(
+    imageUrl: String?,
+    title: String
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(230.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (imageUrl.isNullOrBlank()) {
+            Text(
+                text = title,
+                modifier = Modifier.padding(24.dp),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        } else {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "$title image",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
         }
     }
 }
@@ -264,7 +632,8 @@ private fun GameDetailRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text(
             text = label,
@@ -275,6 +644,7 @@ private fun GameDetailRow(
 
         Text(
             text = value,
+            modifier = Modifier.weight(1.4f),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium
         )
@@ -497,3 +867,14 @@ private fun playerLabel(playerCount: Int): String =
     } else {
         "1 person game"
     }
+
+private fun joinedNames(values: List<String>): String =
+    values
+        .filter { value -> value.isNotBlank() }
+        .distinct()
+        .joinToString(", ")
+
+private fun formatGameReleaseDate(value: String): String =
+    runCatching {
+        LocalDate.parse(value).format(GameReleaseDateFormatter)
+    }.getOrDefault(value)
