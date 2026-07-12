@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,9 +40,11 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.remote.EpisodeDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.util.formatStoredDate
 import kotlinx.coroutines.launch
 
 private const val TMDB_EPISODE_DETAIL_IMAGE_BASE_URL =
@@ -68,7 +71,23 @@ fun EpisodeDetailScreen(
     var errorMessage by remember(seriesId, seasonNumber, episodeNumber) {
         mutableStateOf<String?>(null)
     }
+
     val applicationContext = LocalContext.current.applicationContext
+    val database = remember(applicationContext) {
+        PhilsOsophyDatabase.getInstance(applicationContext)
+    }
+    val watchedEpisodeFlow = remember(database, seriesId) {
+        database.watchedEpisodeDao().observeForSeries(seriesId)
+    }
+    val watchedEpisodeRecords by watchedEpisodeFlow.collectAsState(
+        initial = emptyList()
+    )
+    val watchedAtEpochMillis = watchedEpisodeRecords
+        .firstOrNull { record ->
+            record.seasonNumber == seasonNumber &&
+                record.episodeNumber == episodeNumber
+        }
+        ?.watchedAtEpochMillis
     val completionTracker = remember(applicationContext) {
         SeriesCompletionTracker(applicationContext)
     }
@@ -274,6 +293,29 @@ fun EpisodeDetailScreen(
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+
+        Column(
+            modifier = Modifier.padding(
+                start = 24.dp,
+                end = 24.dp,
+                bottom = 24.dp
+            )
+        ) {
+            Text(
+                text = "Watched",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = if (isWatched) {
+                    formatStoredDate(watchedAtEpochMillis)
+                } else {
+                    "Not watched"
+                },
+                style = MaterialTheme.typography.titleMedium
+            )
         }
 
         HorizontalDivider()
