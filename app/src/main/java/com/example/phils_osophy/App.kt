@@ -26,9 +26,9 @@ import com.example.phils_osophy.ui.screens.GameLibraryScreen
 import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
+import com.example.phils_osophy.ui.screens.ProfileScreen
 import com.example.phils_osophy.ui.screens.SeriesDetailScreen
 import com.example.phils_osophy.ui.screens.SeriesLibraryScreen
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 
 @Composable
@@ -68,6 +68,9 @@ fun App() {
     val savedGameDao = remember(database) {
         database.savedGameDao()
     }
+    val savedBookDao = remember(database) {
+        database.savedBookDao()
+    }
 
     val savedMoviesFlow = remember(savedMovieDao) {
         savedMovieDao.observeAll()
@@ -80,6 +83,13 @@ fun App() {
         savedGameDao.observeAll()
     }
     val savedGames by savedGamesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val savedBooksFlow = remember(savedBookDao) {
+        savedBookDao.observeAll()
+    }
+    val savedBooks by savedBooksFlow.collectAsState(
         initial = emptyList()
     )
 
@@ -125,17 +135,22 @@ fun App() {
             ).distinctBy { series -> series.id }
     }
 
-    val watchedEpisodesFlow = remember(
-        watchedEpisodeDao,
+    val allWatchedEpisodesFlow = remember(watchedEpisodeDao) {
+        watchedEpisodeDao.observeAll()
+    }
+    val allWatchedEpisodes by allWatchedEpisodesFlow.collectAsState(
+        initial = emptyList()
+    )
+    val watchedEpisodeEntities = remember(
+        allWatchedEpisodes,
         selectedSeriesId
     ) {
         selectedSeriesId?.let { seriesId ->
-            watchedEpisodeDao.observeForSeries(seriesId)
-        } ?: flowOf<List<WatchedEpisodeEntity>>(emptyList())
+            allWatchedEpisodes.filter { episode ->
+                episode.seriesId == seriesId
+            }
+        }.orEmpty()
     }
-    val watchedEpisodeEntities by watchedEpisodesFlow.collectAsState(
-        initial = emptyList()
-    )
     val watchedEpisodeKeys = watchedEpisodeEntities
         .map { episode ->
             WatchedEpisodeKey(
@@ -166,6 +181,13 @@ fun App() {
         currentScreen = AppScreen.SeriesMenu
     }
 
+    fun openProfile() {
+        pendingMovie = null
+        selectedMovieId = null
+        clearSelectedSeries()
+        currentScreen = AppScreen.Profile
+    }
+
     BackHandler(enabled = currentScreen != AppScreen.MoviesMenu) {
         when (currentScreen) {
             AppScreen.MoviesList,
@@ -191,7 +213,9 @@ fun App() {
             selectedMovieId = null
             clearSelectedSeries()
             currentScreen = category.toAppScreen()
-        }
+        },
+        isProfileSelected = currentScreen == AppScreen.Profile,
+        onProfileClick = ::openProfile
     ) {
         when (currentScreen) {
             AppScreen.MoviesMenu -> {
@@ -439,8 +463,12 @@ fun App() {
             }
 
             AppScreen.Profile -> {
-                EmptyPageScreen(
-                    title = "Profile",
+                ProfileScreen(
+                    movies = savedMovieEntities,
+                    series = allSavedSeries,
+                    watchedEpisodes = allWatchedEpisodes,
+                    games = savedGames,
+                    books = savedBooks,
                     onBackClick = ::openMovies
                 )
             }
@@ -501,7 +529,7 @@ fun App() {
     }
 }
 
-private fun AppScreen.toBottomCategory(): BottomCategory = when (this) {
+private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.MoviesMenu,
     AppScreen.MoviesList,
     AppScreen.MovieDetail -> BottomCategory.Movies
@@ -511,7 +539,7 @@ private fun AppScreen.toBottomCategory(): BottomCategory = when (this) {
     AppScreen.EpisodeDetail -> BottomCategory.Series
 
     AppScreen.Explore -> BottomCategory.Explore
-    AppScreen.Profile -> BottomCategory.Profile
+    AppScreen.Profile -> null
     AppScreen.GamesMenu -> BottomCategory.Games
     AppScreen.BooksMenu -> BottomCategory.Books
 }
@@ -520,7 +548,6 @@ private fun BottomCategory.toAppScreen(): AppScreen = when (this) {
     BottomCategory.Movies -> AppScreen.MoviesMenu
     BottomCategory.Series -> AppScreen.SeriesMenu
     BottomCategory.Explore -> AppScreen.Explore
-    BottomCategory.Profile -> AppScreen.Profile
     BottomCategory.Games -> AppScreen.GamesMenu
     BottomCategory.Books -> AppScreen.BooksMenu
 }

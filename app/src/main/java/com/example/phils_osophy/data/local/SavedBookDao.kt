@@ -11,6 +11,12 @@ interface SavedBookDao {
 
     @Query(
         "SELECT * FROM saved_books " +
+            "ORDER BY title COLLATE NOCASE ASC"
+    )
+    fun observeAll(): Flow<List<SavedBookEntity>>
+
+    @Query(
+        "SELECT * FROM saved_books " +
             "WHERE status = 'IN_PROGRESS' " +
             "ORDER BY title COLLATE NOCASE ASC"
     )
