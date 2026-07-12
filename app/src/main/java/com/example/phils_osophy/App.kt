@@ -150,6 +150,14 @@ fun App() {
                                 )
                             }
                         },
+                        onChangeRating = { rating ->
+                            coroutineScope.launch {
+                                savedMovieDao.updateRating(
+                                    movieId = selectedMovie.id,
+                                    userRating = rating.coerceIn(0, 10)
+                                )
+                            }
+                        },
                         onRemoveMovieClick = {
                             coroutineScope.launch {
                                 savedMovieDao.deleteById(selectedMovie.id)

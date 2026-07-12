@@ -88,14 +88,15 @@ fun SavedMovieGrid(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    emptyMessage: String = "No movies added yet."
 ) {
     if (movies.isEmpty()) {
         Box(
             modifier = modifier,
             contentAlignment = Alignment.Center
         ) {
-            Text("No movies added yet.")
+            Text(emptyMessage)
         }
         return
     }
