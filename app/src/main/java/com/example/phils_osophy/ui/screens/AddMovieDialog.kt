@@ -125,7 +125,7 @@ fun AddMovieDialog(
                     onValueChange = { note = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = {
-                        Text("Note (optional)")
+                        Text("Comment (optional)")
                     },
                     minLines = 3,
                     maxLines = 5,
