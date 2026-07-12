@@ -33,11 +33,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -48,6 +50,8 @@ import kotlinx.coroutines.launch
 
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
+
+private val FavoriteColor = Color(0xFFE53935)
 
 @Composable
 fun MovieSearchScreen(
@@ -63,6 +67,7 @@ fun MovieSearchScreen(
     }
     var isLoading by remember { mutableStateOf(false) }
     var hasSearched by remember { mutableStateOf(false) }
+    var showFavoritesOnly by remember { mutableStateOf(false) }
     var errorMessage by remember {
         mutableStateOf<String?>(null)
     }
@@ -70,28 +75,57 @@ fun MovieSearchScreen(
     val savedMovieIds = savedMovies
         .map { movie -> movie.id }
         .toSet()
+    val favoriteMovies = savedMovies.filter { movie ->
+        movie.isFavorite
+    }
+    val visibleSavedMovies = when {
+        showFavoritesOnly && hasSearched -> {
+            favoriteMovies.filter { movie ->
+                movie.title.contains(
+                    other = query.trim(),
+                    ignoreCase = true
+                )
+            }
+        }
+
+        showFavoritesOnly -> favoriteMovies
+        else -> savedMovies
+    }
+
     val coroutineScope = rememberCoroutineScope()
+
+    val resetSearch = {
+        hasSearched = false
+        movies = emptyList()
+        errorMessage = null
+        isLoading = false
+    }
 
     val searchMovies = {
         val cleanQuery = query.trim()
 
         if (cleanQuery.isNotEmpty() && !isLoading) {
-            coroutineScope.launch {
-                isLoading = true
-                hasSearched = true
-                errorMessage = null
+            errorMessage = null
+            hasSearched = true
 
-                try {
-                    movies = TmdbClient.api
-                        .searchMovies(cleanQuery)
-                        .results
-                } catch (exception: Exception) {
-                    movies = emptyList()
-                    errorMessage =
-                        exception.localizedMessage
-                            ?: "Movie search failed."
-                } finally {
-                    isLoading = false
+            if (showFavoritesOnly) {
+                movies = emptyList()
+            } else {
+                coroutineScope.launch {
+                    isLoading = true
+
+                    try {
+                        movies = TmdbClient.api
+                            .searchMovies(cleanQuery)
+                            .results
+                    } catch (exception: Exception) {
+                        movies = emptyList()
+                        errorMessage =
+                            exception.localizedMessage
+                                ?: "Movie search failed."
+                    } finally {
+                        isLoading = false
+                    }
                 }
             }
         }
@@ -108,10 +142,34 @@ fun MovieSearchScreen(
             Text("← Back")
         }
 
-        Text(
-            text = "Movies",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Movies",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineMedium
+            )
+
+            TextButton(
+                onClick = {
+                    showFavoritesOnly = !showFavoritesOnly
+                    query = ""
+                    resetSearch()
+                }
+            ) {
+                Text(
+                    text = if (showFavoritesOnly) "♥" else "♡",
+                    color = if (showFavoritesOnly) {
+                        FavoriteColor
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    fontSize = 30.sp
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -126,14 +184,18 @@ fun MovieSearchScreen(
                     query = newQuery
 
                     if (newQuery.isBlank()) {
-                        hasSearched = false
-                        movies = emptyList()
-                        errorMessage = null
+                        resetSearch()
                     }
                 },
                 modifier = Modifier.weight(1f),
                 label = {
-                    Text("Search for a movie")
+                    Text(
+                        if (showFavoritesOnly) {
+                            "Search within favorites"
+                        } else {
+                            "Search for a movie"
+                        }
+                    )
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
@@ -156,18 +218,32 @@ fun MovieSearchScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (!hasSearched) {
+        if (showFavoritesOnly || !hasSearched) {
             Text(
-                text = "My movie list",
+                text = if (showFavoritesOnly) {
+                    "My favorites"
+                } else {
+                    "My movie list"
+                },
                 style = MaterialTheme.typography.titleLarge
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
             SavedMovieGrid(
-                movies = savedMovies,
+                movies = visibleSavedMovies,
                 onMovieClick = onMovieClick,
                 onFavoriteClick = onFavoriteClick,
+                emptyMessage = when {
+                    showFavoritesOnly && hasSearched ->
+                        "No favorite movies found."
+
+                    showFavoritesOnly ->
+                        "No favorite movies yet."
+
+                    else ->
+                        "No movies added yet."
+                },
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -202,7 +278,8 @@ fun MovieSearchScreen(
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement =
+                                Arrangement.spacedBy(12.dp)
                         ) {
                             items(
                                 items = movies,
@@ -210,7 +287,8 @@ fun MovieSearchScreen(
                             ) { movie ->
                                 MovieResultCard(
                                     movie = movie,
-                                    isAdded = movie.id in savedMovieIds,
+                                    isAdded =
+                                        movie.id in savedMovieIds,
                                     onAddClick = {
                                         onAddMovie(movie)
                                     }
