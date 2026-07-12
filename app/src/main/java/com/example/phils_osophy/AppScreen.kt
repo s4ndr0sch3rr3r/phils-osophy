@@ -8,6 +8,8 @@ enum class AppScreen {
     MovieDetail,
 
     SeriesMenu,
+    SeriesDetail,
+    EpisodeDetail,
 
     Explore,
     Profile,
