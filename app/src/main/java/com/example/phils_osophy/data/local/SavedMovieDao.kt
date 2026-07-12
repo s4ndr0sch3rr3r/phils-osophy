@@ -38,6 +38,16 @@ interface SavedMovieDao {
         userRating: Int
     )
 
+    @Query(
+        "UPDATE saved_movies " +
+            "SET note = :note " +
+            "WHERE id = :movieId"
+    )
+    suspend fun updateNote(
+        movieId: Int,
+        note: String
+    )
+
     @Query("DELETE FROM saved_movies WHERE id = :movieId")
     suspend fun deleteById(movieId: Int)
 }
