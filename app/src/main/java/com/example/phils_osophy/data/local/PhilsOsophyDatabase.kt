@@ -15,7 +15,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedGameEntity::class,
         SavedBookEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -138,6 +138,25 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration8To9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE saved_books " +
+                        "ADD COLUMN readingProgressPercent " +
+                        "INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_books " +
+                        "ADD COLUMN finishedAtEpochMillis INTEGER"
+                )
+                database.execSQL(
+                    "UPDATE saved_books " +
+                        "SET readingProgressPercent = 100 " +
+                        "WHERE status = 'FINISHED'"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -152,7 +171,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration4To5,
                         migration5To6,
                         migration6To7,
-                        migration7To8
+                        migration7To8,
+                        migration8To9
                     )
                     .build()
                     .also { database ->
