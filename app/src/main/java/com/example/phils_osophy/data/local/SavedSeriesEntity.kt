@@ -20,7 +20,7 @@ data class SavedSeriesEntity(
     @ColumnInfo(defaultValue = "0")
     val isFavorite: Boolean,
     @ColumnInfo(defaultValue = "0")
-    val userRating: Int
+    val userRating: Int = 0
 )
 
 enum class SeriesStatus {
