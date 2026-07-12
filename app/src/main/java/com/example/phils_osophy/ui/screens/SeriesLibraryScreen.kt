@@ -91,12 +91,8 @@ fun SeriesLibraryScreen(
     var hasSearched by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var isSearchBarVisible by remember { mutableStateOf(true) }
-    var errorMessage by remember {
-        mutableStateOf<String?>(null)
-    }
-    var pendingSeries by remember {
-        mutableStateOf<SeriesDto?>(null)
-    }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var pendingSeries by remember { mutableStateOf<SeriesDto?>(null) }
     var managedSeries by remember {
         mutableStateOf<SavedSeriesEntity?>(null)
     }
@@ -113,15 +109,9 @@ fun SeriesLibraryScreen(
                 source: NestedScrollSource
             ): Offset {
                 when {
-                    available.y < -2f -> {
-                        isSearchBarVisible = false
-                    }
-
-                    available.y > 2f -> {
-                        isSearchBarVisible = true
-                    }
+                    available.y < -2f -> isSearchBarVisible = false
+                    available.y > 2f -> isSearchBarVisible = true
                 }
-
                 return Offset.Zero
             }
         }
@@ -154,28 +144,23 @@ fun SeriesLibraryScreen(
         seriesId: Int,
         status: SeriesStatus
     ) {
-        if (status != SeriesStatus.FINISHED) {
-            return
-        }
-
-        coroutineScope.launch {
-            completionTracker.markAllEpisodesWatched(seriesId)
+        if (status == SeriesStatus.FINISHED) {
+            coroutineScope.launch {
+                completionTracker.markAllEpisodesWatched(seriesId)
+            }
         }
     }
 
     fun searchSeries() {
         val cleanQuery = query.trim()
-
         if (cleanQuery.isBlank() || isLoading) {
             return
         }
 
         hasSearched = true
         errorMessage = null
-
         coroutineScope.launch {
             isLoading = true
-
             try {
                 searchResults = TmdbClient.api
                     .searchSeries(cleanQuery)
@@ -211,7 +196,6 @@ fun SeriesLibraryScreen(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
-
             TextButton(
                 onClick = {
                     showFavoritesOnly = !showFavoritesOnly
@@ -234,9 +218,7 @@ fun SeriesLibraryScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        AnimatedVisibility(
-            visible = isSearchBarVisible
-        ) {
+        AnimatedVisibility(visible = isSearchBarVisible) {
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -247,36 +229,27 @@ fun SeriesLibraryScreen(
                         value = query,
                         onValueChange = { newQuery ->
                             query = newQuery
-
                             if (newQuery.isBlank()) {
                                 resetSearch()
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = {
-                            Text("Search for a series")
-                        },
+                        label = { Text("Search for a series") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Search
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = {
-                                searchSeries()
-                            }
+                            onSearch = { searchSeries() }
                         )
                     )
-
                     Button(
-                        onClick = {
-                            searchSeries()
-                        },
+                        onClick = { searchSeries() },
                         enabled = query.isNotBlank() && !isLoading
                     ) {
                         Text("Search")
                     }
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -295,45 +268,34 @@ fun SeriesLibraryScreen(
                         series = filtered(inProgressSeries),
                         onSeriesClick = onSeriesClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series ->
-                            managedSeries = series
-                        }
+                        onManageClick = { series -> managedSeries = series }
                     )
                 }
-
                 item {
                     LibrarySection(
                         title = "Séries terminées",
                         series = filtered(finishedSeries),
                         onSeriesClick = onSeriesClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series ->
-                            managedSeries = series
-                        }
+                        onManageClick = { series -> managedSeries = series }
                     )
                 }
-
                 item {
                     LibrarySection(
                         title = "Séries à regarder",
                         series = filtered(toWatchSeries),
                         onSeriesClick = onSeriesClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series ->
-                            managedSeries = series
-                        }
+                        onManageClick = { series -> managedSeries = series }
                     )
                 }
-
                 item {
                     LibrarySection(
                         title = "Séries arrêtées",
                         series = filtered(stoppedSeries),
                         onSeriesClick = onSeriesClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series ->
-                            managedSeries = series
-                        }
+                        onManageClick = { series -> managedSeries = series }
                     )
                 }
             }
@@ -349,23 +311,19 @@ fun SeriesLibraryScreen(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
-
                     errorMessage != null -> {
                         Text(
                             text = errorMessage.orEmpty(),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-
                     searchResults.isEmpty() -> {
                         Text("No series found.")
                     }
-
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement =
-                                Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(
                                 items = searchResults,
@@ -373,8 +331,7 @@ fun SeriesLibraryScreen(
                             ) { series ->
                                 LibrarySearchResult(
                                     series = series,
-                                    isAdded =
-                                        series.id in savedSeriesIds,
+                                    isAdded = series.id in savedSeriesIds,
                                     onAddClick = {
                                         pendingSeries = series
                                     }
@@ -437,50 +394,68 @@ private fun LibrarySection(
     ) -> Unit,
     onManageClick: (SavedSeriesEntity) -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
+    var isExpanded by remember(title) {
+        mutableStateOf(true)
+    }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        if (series.isEmpty()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    isExpanded = !isExpanded
+                }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                text = "No series in this category.",
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (isExpanded) "⌄" else "›",
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        } else {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(end = 8.dp)
-            ) {
-                items(
-                    items = series,
-                    key = { savedSeries ->
-                        savedSeries.id
-                    }
-                ) { savedSeries ->
-                    LibrarySeriesPoster(
-                        series = savedSeries,
-                        onClick = {
-                            onSeriesClick(savedSeries.id)
-                        },
-                        onFavoriteClick = {
-                            onFavoriteClick(
-                                savedSeries.id,
-                                !savedSeries.isFavorite
-                            )
-                        },
-                        onManageClick = {
-                            onManageClick(savedSeries)
-                        }
+        }
+
+        AnimatedVisibility(visible = isExpanded) {
+            Column {
+                Spacer(modifier = Modifier.height(10.dp))
+                if (series.isEmpty()) {
+                    Text(
+                        text = "No series in this category.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                } else {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(
+                            items = series,
+                            key = { savedSeries -> savedSeries.id }
+                        ) { savedSeries ->
+                            LibrarySeriesPoster(
+                                series = savedSeries,
+                                onClick = {
+                                    onSeriesClick(savedSeries.id)
+                                },
+                                onFavoriteClick = {
+                                    onFavoriteClick(
+                                        savedSeries.id,
+                                        !savedSeries.isFavorite
+                                    )
+                                },
+                                onManageClick = {
+                                    onManageClick(savedSeries)
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -495,12 +470,8 @@ private fun LibrarySeriesPoster(
     onManageClick: () -> Unit
 ) {
     val posterUrl = series.posterPath
-        ?.takeIf { path ->
-            path.isNotBlank()
-        }
-        ?.let { path ->
-            "$TMDB_LIBRARY_POSTER_BASE_URL$path"
-        }
+        ?.takeIf { path -> path.isNotBlank() }
+        ?.let { path -> "$TMDB_LIBRARY_POSTER_BASE_URL$path" }
     var isLoading by remember(posterUrl) {
         mutableStateOf(posterUrl != null)
     }
@@ -516,25 +487,17 @@ private fun LibrarySeriesPoster(
         Column {
             Box(
                 modifier = Modifier
-                    .size(
-                        width = 120.dp,
-                        height = 180.dp
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                    .size(width = 120.dp, height = 180.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (posterUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(
-                            LocalContext.current
-                        )
+                        model = ImageRequest.Builder(LocalContext.current)
                             .data(posterUrl)
                             .crossfade(true)
                             .build(),
-                        contentDescription =
-                            "${series.name} poster",
+                        contentDescription = "${series.name} poster",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop,
                         onLoading = {
@@ -552,11 +515,7 @@ private fun LibrarySeriesPoster(
                     )
                 }
 
-                if (
-                    posterUrl == null ||
-                    isLoading ||
-                    hasError
-                ) {
+                if (posterUrl == null || isLoading || hasError) {
                     Text(
                         text = series.name,
                         modifier = Modifier.padding(10.dp),
@@ -566,27 +525,16 @@ private fun LibrarySeriesPoster(
                 }
 
                 Text(
-                    text = if (series.isFavorite) {
-                        "♥"
-                    } else {
-                        "♡"
-                    },
+                    text = if (series.isFavorite) "♥" else "♡",
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp)
                         .background(
-                            color = Color.Black.copy(
-                                alpha = 0.65f
-                            ),
+                            color = Color.Black.copy(alpha = 0.65f),
                             shape = RoundedCornerShape(50)
                         )
-                        .clickable(
-                            onClick = onFavoriteClick
-                        )
-                        .padding(
-                            horizontal = 7.dp,
-                            vertical = 3.dp
-                        ),
+                        .clickable(onClick = onFavoriteClick)
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                     color = if (series.isFavorite) {
                         LibraryFavoriteColor
                     } else {
@@ -601,18 +549,11 @@ private fun LibrarySeriesPoster(
                         .align(Alignment.TopEnd)
                         .padding(6.dp)
                         .background(
-                            color = Color.Black.copy(
-                                alpha = 0.65f
-                            ),
+                            color = Color.Black.copy(alpha = 0.65f),
                             shape = RoundedCornerShape(50)
                         )
-                        .clickable(
-                            onClick = onManageClick
-                        )
-                        .padding(
-                            horizontal = 7.dp,
-                            vertical = 3.dp
-                        ),
+                        .clickable(onClick = onManageClick)
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
@@ -634,37 +575,25 @@ private fun LibrarySearchResult(
     isAdded: Boolean,
     onAddClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp)
-        ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(12.dp)) {
             val posterUrl = series.posterPath?.let { path ->
                 "$TMDB_LIBRARY_POSTER_BASE_URL$path"
             }
 
             Box(
                 modifier = Modifier
-                    .size(
-                        width = 96.dp,
-                        height = 144.dp
-                    )
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                    .size(width = 96.dp, height = 144.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (posterUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(
-                            LocalContext.current
-                        )
+                        model = ImageRequest.Builder(LocalContext.current)
                             .data(posterUrl)
                             .crossfade(true)
                             .build(),
-                        contentDescription =
-                            "${series.name} poster",
+                        contentDescription = "${series.name} poster",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
@@ -679,49 +608,32 @@ private fun LibrarySearchResult(
             }
 
             Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = series.name,
                     style = MaterialTheme.typography.titleMedium
                 )
-
                 if (series.firstAirDate.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-
                     Text(
-                        text =
-                            "First aired: ${series.firstAirDate}",
-                        style =
-                            MaterialTheme.typography.bodySmall
+                        text = "First aired: ${series.firstAirDate}",
+                        style = MaterialTheme.typography.bodySmall
                     )
                 }
-
                 if (series.overview.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
-
                     Text(
                         text = series.overview,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
                 Spacer(modifier = Modifier.height(12.dp))
-
                 Button(
                     onClick = onAddClick,
                     enabled = !isAdded
                 ) {
-                    Text(
-                        if (isAdded) {
-                            "Added"
-                        } else {
-                            "+ Add"
-                        }
-                    )
+                    Text(if (isAdded) "Added" else "+ Add")
                 }
             }
         }
@@ -740,9 +652,7 @@ private fun LibraryAddDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = {
-            Text("Add ${series.name}")
-        },
+        title = { Text("Add ${series.name}") },
         text = {
             LibraryStatusChoices(
                 selectedStatus = selectedStatus,
@@ -752,11 +662,7 @@ private fun LibraryAddDialog(
             )
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onAdd(selectedStatus)
-                }
-            ) {
+            Button(onClick = { onAdd(selectedStatus) }) {
                 Text("Add")
             }
         },
@@ -775,35 +681,24 @@ private fun LibraryManageDialog(
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var selectedStatus by remember(
-        series.id,
-        series.status
-    ) {
-        mutableStateOf(
-            SeriesStatus.fromStorage(series.status)
-        )
+    var selectedStatus by remember(series.id, series.status) {
+        mutableStateOf(SeriesStatus.fromStorage(series.status))
     }
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = {
-            Text(series.name)
-        },
+        title = { Text(series.name) },
         text = {
             Column {
                 Text("Move to")
-
                 Spacer(modifier = Modifier.height(8.dp))
-
                 LibraryStatusChoices(
                     selectedStatus = selectedStatus,
                     onStatusSelected = { status ->
                         selectedStatus = status
                     }
                 )
-
                 Spacer(modifier = Modifier.height(8.dp))
-
                 TextButton(onClick = onRemove) {
                     Text(
                         text = "Remove series",
@@ -813,11 +708,7 @@ private fun LibraryManageDialog(
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onStatusChange(selectedStatus)
-                }
-            ) {
+            Button(onClick = { onStatusChange(selectedStatus) }) {
                 Text("Save")
             }
         },
@@ -851,17 +742,15 @@ private fun LibraryStatusChoices(
                         onStatusSelected(status)
                     }
                 )
-
                 Text(status.libraryDisplayName())
             }
         }
     }
 }
 
-private fun SeriesStatus.libraryDisplayName(): String =
-    when (this) {
-        SeriesStatus.IN_PROGRESS -> "En cours"
-        SeriesStatus.FINISHED -> "Séries terminées"
-        SeriesStatus.TO_WATCH -> "Séries à regarder"
-        SeriesStatus.STOPPED -> "Séries arrêtées"
-    }
+private fun SeriesStatus.libraryDisplayName(): String = when (this) {
+    SeriesStatus.IN_PROGRESS -> "En cours"
+    SeriesStatus.FINISHED -> "Séries terminées"
+    SeriesStatus.TO_WATCH -> "Séries à regarder"
+    SeriesStatus.STOPPED -> "Séries arrêtées"
+}
