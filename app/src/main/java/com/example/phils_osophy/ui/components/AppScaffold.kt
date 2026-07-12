@@ -22,16 +22,6 @@ fun AppScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    val profileEndPadding = when (selectedCategory) {
-        BottomCategory.Movies,
-        BottomCategory.Series,
-        BottomCategory.Books -> 66.dp
-
-        BottomCategory.Games,
-        BottomCategory.Explore,
-        null -> 16.dp
-    }
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
@@ -58,7 +48,7 @@ fun AppScaffold(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(top = 16.dp, end = profileEndPadding)
+                    .padding(top = 16.dp, end = 16.dp)
             )
         }
     }

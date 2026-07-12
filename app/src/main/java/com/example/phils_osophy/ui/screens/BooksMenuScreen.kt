@@ -333,7 +333,9 @@ private fun BookLibraryScreen(
             .padding(16.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 66.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
