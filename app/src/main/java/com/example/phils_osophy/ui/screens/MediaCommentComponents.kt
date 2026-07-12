@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -70,13 +71,14 @@ fun EditableMediaCommentSection(
     mediaKey: Any,
     savedComment: String,
     onSave: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    contentPadding: Dp = 24.dp
 ) {
     var comment by remember(mediaKey, savedComment) {
         mutableStateOf(savedComment)
     }
 
-    Column(modifier = modifier.padding(24.dp)) {
+    Column(modifier = modifier.padding(contentPadding)) {
         Text(
             text = "Your comment",
             style = MaterialTheme.typography.headlineSmall,
