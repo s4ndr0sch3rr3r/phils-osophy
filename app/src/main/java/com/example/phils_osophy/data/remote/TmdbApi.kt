@@ -29,6 +29,12 @@ interface TmdbApi {
         @Path("movie_id") movieId: Int,
         @Query("language") language: String = "en-US"
     ): MovieDetailsDto
+
+    @GET("tv/{series_id}")
+    suspend fun getSeriesDetails(
+        @Path("series_id") seriesId: Int,
+        @Query("language") language: String = "en-US"
+    ): SeriesDetailsDto
 }
 
 @Serializable
