@@ -1,6 +1,7 @@
 package com.example.phils_osophy.data.remote
 
 import com.example.phils_osophy.BuildConfig
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -15,6 +16,10 @@ object TmdbClient {
     }
 
     private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(45, TimeUnit.SECONDS)
         .addInterceptor { chain ->
             val request = chain.request()
                 .newBuilder()
