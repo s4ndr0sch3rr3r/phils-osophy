@@ -1,7 +1,6 @@
 package com.example.phils_osophy.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,9 +27,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -42,11 +43,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
-import androidx.compose.ui.input.nestedscroll.NestedScrollSource
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -63,10 +60,9 @@ import com.example.phils_osophy.data.local.SavedBookEntity
 import com.example.phils_osophy.data.local.toSavedBookEntity
 import com.example.phils_osophy.data.remote.BookDto
 import com.example.phils_osophy.data.remote.OpenLibraryClient
+import com.example.phils_osophy.ui.util.formatStoredDate
 import kotlinx.coroutines.launch
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 private const val OPEN_LIBRARY_COVER_BASE_URL =
     "https://covers.openlibrary.org/b/id"
@@ -88,6 +84,7 @@ fun BooksMenuScreen(
             .getInstance(applicationContext)
             .savedBookDao()
     }
+    val coroutineScope = rememberCoroutineScope()
 
     val inProgressBooks by remember(savedBookDao) {
         savedBookDao.observeInProgress()
@@ -116,18 +113,45 @@ fun BooksMenuScreen(
             ).distinctBy { book -> book.key }
     }
 
-    val coroutineScope = rememberCoroutineScope()
     var selectedBookKey by remember {
         mutableStateOf<String?>(null)
     }
-
     val selectedBook = allSavedBooks.firstOrNull { book ->
         book.key == selectedBookKey
     }
 
+    fun updateBook(
+        book: SavedBookEntity,
+        status: BookStatus,
+        progress: Int
+    ) {
+        val normalizedProgress = normalizeProgress(status, progress)
+        val finishedAt = if (status == BookStatus.FINISHED) {
+            book.finishedAtEpochMillis ?: System.currentTimeMillis()
+        } else {
+            null
+        }
+
+        coroutineScope.launch {
+            savedBookDao.updateReadingState(
+                bookKey = book.key,
+                status = status.name,
+                readingProgressPercent = normalizedProgress,
+                finishedAtEpochMillis = finishedAt
+            )
+        }
+    }
+
     if (selectedBookKey != null) {
-        if (selectedBook != null) {
-            BookDetailContent(
+        if (selectedBook == null) {
+            EmptyPageScreen(
+                title = "Book unavailable",
+                onBackClick = {
+                    selectedBookKey = null
+                }
+            )
+        } else {
+            BookDetailScreen(
                 book = selectedBook,
                 onBackClick = {
                     selectedBookKey = null
@@ -140,13 +164,8 @@ fun BooksMenuScreen(
                         )
                     }
                 },
-                onStatusChange = { status ->
-                    coroutineScope.launch {
-                        savedBookDao.updateStatus(
-                            bookKey = selectedBook.key,
-                            status = status.name
-                        )
-                    }
+                onSaveReadingState = { status, progress ->
+                    updateBook(selectedBook, status, progress)
                 },
                 onRemove = {
                     coroutineScope.launch {
@@ -155,18 +174,11 @@ fun BooksMenuScreen(
                     selectedBookKey = null
                 }
             )
-        } else {
-            EmptyPageScreen(
-                title = "Book unavailable",
-                onBackClick = {
-                    selectedBookKey = null
-                }
-            )
         }
         return
     }
 
-    BookLibraryContent(
+    BookLibraryScreen(
         inProgressBooks = inProgressBooks,
         finishedBooks = finishedBooks,
         toReadBooks = toReadBooks,
@@ -181,14 +193,6 @@ fun BooksMenuScreen(
         onBookClick = { bookKey ->
             selectedBookKey = bookKey
         },
-        onStatusChange = { bookKey, status ->
-            coroutineScope.launch {
-                savedBookDao.updateStatus(
-                    bookKey = bookKey,
-                    status = status.name
-                )
-            }
-        },
         onFavoriteClick = { bookKey, isFavorite ->
             coroutineScope.launch {
                 savedBookDao.updateFavorite(
@@ -196,6 +200,9 @@ fun BooksMenuScreen(
                     isFavorite = isFavorite
                 )
             }
+        },
+        onSaveReadingState = { book, status, progress ->
+            updateBook(book, status, progress)
         },
         onRemoveBook = { bookKey ->
             coroutineScope.launch {
@@ -207,16 +214,20 @@ fun BooksMenuScreen(
 }
 
 @Composable
-private fun BookLibraryContent(
+private fun BookLibraryScreen(
     inProgressBooks: List<SavedBookEntity>,
     finishedBooks: List<SavedBookEntity>,
     toReadBooks: List<SavedBookEntity>,
     abandonedBooks: List<SavedBookEntity>,
     onAddBook: (BookDto, BookStatus) -> Unit,
     onBookClick: (String) -> Unit,
-    onStatusChange: (bookKey: String, status: BookStatus) -> Unit,
     onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit,
-    onRemoveBook: (bookKey: String) -> Unit,
+    onSaveReadingState: (
+        book: SavedBookEntity,
+        status: BookStatus,
+        progress: Int
+    ) -> Unit,
+    onRemoveBook: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
@@ -228,7 +239,6 @@ private fun BookLibraryContent(
     var isLoading by remember { mutableStateOf(false) }
     var hasSearched by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
-    var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember {
         mutableStateOf<String?>(null)
     }
@@ -240,27 +250,6 @@ private fun BookLibraryContent(
     }
 
     val coroutineScope = rememberCoroutineScope()
-    val searchBarScrollConnection = remember {
-        object : NestedScrollConnection {
-            override fun onPreScroll(
-                available: Offset,
-                source: NestedScrollSource
-            ): Offset {
-                when {
-                    available.y < -2f -> {
-                        isSearchBarVisible = false
-                    }
-
-                    available.y > 2f -> {
-                        isSearchBarVisible = true
-                    }
-                }
-
-                return Offset.Zero
-            }
-        }
-    }
-
     val allSavedBooks = (
         inProgressBooks +
             finishedBooks +
@@ -278,32 +267,27 @@ private fun BookLibraryContent(
         isLoading = false
     }
 
-    fun filtered(
-        books: List<SavedBookEntity>
-    ): List<SavedBookEntity> = books.filter { savedBook ->
-        !showFavoritesOnly || savedBook.isFavorite
-    }
+    fun filtered(books: List<SavedBookEntity>): List<SavedBookEntity> =
+        books.filter { book ->
+            !showFavoritesOnly || book.isFavorite
+        }
 
     fun searchBooks() {
         val cleanQuery = query.trim()
-
         if (cleanQuery.isBlank() || isLoading) {
             return
         }
 
         hasSearched = true
         errorMessage = null
-
         coroutineScope.launch {
             isLoading = true
-
             try {
                 searchResults = OpenLibraryClient.api
                     .searchBooks(cleanQuery)
                     .docs
                     .filter { book ->
-                        book.key.isNotBlank() &&
-                            book.title.isNotBlank()
+                        book.key.isNotBlank() && book.title.isNotBlank()
                     }
                     .distinctBy { book -> book.key }
             } catch (exception: Exception) {
@@ -319,7 +303,6 @@ private fun BookLibraryContent(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .nestedScroll(searchBarScrollConnection)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(16.dp)
@@ -337,12 +320,10 @@ private fun BookLibraryContent(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
-
             TextButton(
                 onClick = {
                     showFavoritesOnly = !showFavoritesOnly
                     query = ""
-                    isSearchBarVisible = true
                     resetSearch()
                 }
             ) {
@@ -360,52 +341,44 @@ private fun BookLibraryContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        AnimatedVisibility(
-            visible = isSearchBarVisible
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { newQuery ->
-                            query = newQuery
-
-                            if (newQuery.isBlank()) {
-                                resetSearch()
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = {
-                            Text("Search for a book")
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                searchBooks()
-                            }
-                        )
-                    )
-
-                    Button(
-                        onClick = {
-                            searchBooks()
-                        },
-                        enabled = query.isNotBlank() && !isLoading
-                    ) {
-                        Text("Search")
+            OutlinedTextField(
+                value = query,
+                onValueChange = { newQuery ->
+                    query = newQuery
+                    if (newQuery.isBlank()) {
+                        resetSearch()
                     }
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                },
+                modifier = Modifier.weight(1f),
+                label = {
+                    Text("Search for a book")
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Search
+                ),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        searchBooks()
+                    }
+                )
+            )
+            Button(
+                onClick = {
+                    searchBooks()
+                },
+                enabled = query.isNotBlank() && !isLoading
+            ) {
+                Text("Search")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         if (!hasSearched) {
             LazyColumn(
@@ -416,7 +389,7 @@ private fun BookLibraryContent(
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
                 item {
-                    BookLibrarySection(
+                    BookShelf(
                         title = "En cours",
                         books = filtered(inProgressBooks),
                         onBookClick = onBookClick,
@@ -426,9 +399,8 @@ private fun BookLibraryContent(
                         }
                     )
                 }
-
                 item {
-                    BookLibrarySection(
+                    BookShelf(
                         title = "Livres terminés",
                         books = filtered(finishedBooks),
                         onBookClick = onBookClick,
@@ -438,9 +410,8 @@ private fun BookLibraryContent(
                         }
                     )
                 }
-
                 item {
-                    BookLibrarySection(
+                    BookShelf(
                         title = "Livres à lire",
                         books = filtered(toReadBooks),
                         onBookClick = onBookClick,
@@ -450,9 +421,8 @@ private fun BookLibraryContent(
                         }
                     )
                 }
-
                 item {
-                    BookLibrarySection(
+                    BookShelf(
                         title = "Livres abandonnés",
                         books = filtered(abandonedBooks),
                         onBookClick = onBookClick,
@@ -475,23 +445,19 @@ private fun BookLibraryContent(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
-
                     errorMessage != null -> {
                         Text(
                             text = errorMessage.orEmpty(),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-
                     searchResults.isEmpty() -> {
                         Text("No books found.")
                     }
-
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            verticalArrangement =
-                                Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(
                                 items = searchResults,
@@ -499,8 +465,7 @@ private fun BookLibraryContent(
                             ) { book ->
                                 BookSearchResult(
                                     book = book,
-                                    isAdded =
-                                        book.key in savedBookKeys,
+                                    isAdded = book.key in savedBookKeys,
                                     onAddClick = {
                                         pendingBook = book
                                     }
@@ -529,8 +494,8 @@ private fun BookLibraryContent(
     managedBook?.let { book ->
         BookManageDialog(
             book = book,
-            onStatusChange = { status ->
-                onStatusChange(book.key, status)
+            onSave = { status, progress ->
+                onSaveReadingState(book, status, progress)
                 managedBook = null
             },
             onRemove = {
@@ -545,32 +510,23 @@ private fun BookLibraryContent(
 }
 
 @Composable
-private fun BookLibrarySection(
+private fun BookShelf(
     title: String,
     books: List<SavedBookEntity>,
     onBookClick: (String) -> Unit,
-    onFavoriteClick: (
-        bookKey: String,
-        isFavorite: Boolean
-    ) -> Unit,
+    onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit,
     onManageClick: (SavedBookEntity) -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold
         )
-
         Spacer(modifier = Modifier.height(10.dp))
 
         if (books.isEmpty()) {
-            Text(
-                text = "No books in this category.",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Text("No books in this category.")
             return
         }
 
@@ -588,10 +544,7 @@ private fun BookLibrarySection(
                         onBookClick(book.key)
                     },
                     onFavoriteClick = {
-                        onFavoriteClick(
-                            book.key,
-                            !book.isFavorite
-                        )
+                        onFavoriteClick(book.key, !book.isFavorite)
                     },
                     onManageClick = {
                         onManageClick(book)
@@ -609,15 +562,10 @@ private fun SavedBookCard(
     onFavoriteClick: () -> Unit,
     onManageClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.width(116.dp)
-    ) {
+    Column(modifier = Modifier.width(116.dp)) {
         Box(
             modifier = Modifier
-                .size(
-                    width = 116.dp,
-                    height = 174.dp
-                )
+                .size(width = 116.dp, height = 174.dp)
                 .clickable(onClick = onBookClick)
         ) {
             BookCover(
@@ -625,7 +573,6 @@ private fun SavedBookCard(
                 title = book.title,
                 modifier = Modifier.fillMaxSize()
             )
-
             Text(
                 text = if (book.isFavorite) "♥" else "♡",
                 modifier = Modifier
@@ -639,7 +586,6 @@ private fun SavedBookCard(
                 },
                 fontSize = 26.sp
             )
-
             Text(
                 text = "•••",
                 modifier = Modifier
@@ -657,13 +603,17 @@ private fun SavedBookCard(
         }
 
         Spacer(modifier = Modifier.height(6.dp))
-
         Text(
             text = book.title,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        ReadingProgressBar(
+            progress = book.readingProgressPercent,
+            compact = true
         )
     }
 }
@@ -674,26 +624,15 @@ private fun BookSearchResult(
     isAdded: Boolean,
     onAddClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp)
-        ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(12.dp)) {
             BookCover(
                 coverId = book.coverId,
                 title = book.title,
-                modifier = Modifier.size(
-                    width = 88.dp,
-                    height = 132.dp
-                )
+                modifier = Modifier.size(width = 88.dp, height = 132.dp)
             )
-
             Spacer(modifier = Modifier.width(12.dp))
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = book.title,
                     style = MaterialTheme.typography.titleMedium,
@@ -701,17 +640,14 @@ private fun BookSearchResult(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-
                 if (book.authorNames.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = book.authorNames.joinToString(", "),
-                        style = MaterialTheme.typography.bodyMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
                 book.firstPublishYear?.let { year ->
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -719,20 +655,12 @@ private fun BookSearchResult(
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-
                 Spacer(modifier = Modifier.height(12.dp))
-
                 Button(
                     onClick = onAddClick,
                     enabled = !isAdded
                 ) {
-                    Text(
-                        if (isAdded) {
-                            "Added"
-                        } else {
-                            "+ Add"
-                        }
-                    )
+                    Text(if (isAdded) "Added" else "+ Add")
                 }
             }
         }
@@ -757,17 +685,13 @@ private fun BookAddDialog(
         text = {
             BookStatusOptions(
                 selectedStatus = selectedStatus,
-                onStatusSelected = {
-                    selectedStatus = it
+                onStatusSelected = { status ->
+                    selectedStatus = status
                 }
             )
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    onAdd(selectedStatus)
-                }
-            ) {
+            Button(onClick = { onAdd(selectedStatus) }) {
                 Text("Add")
             }
         },
@@ -782,14 +706,15 @@ private fun BookAddDialog(
 @Composable
 private fun BookManageDialog(
     book: SavedBookEntity,
-    onStatusChange: (BookStatus) -> Unit,
+    onSave: (status: BookStatus, progress: Int) -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
     var selectedStatus by remember(book.key, book.status) {
-        mutableStateOf(
-            BookStatus.fromStorage(book.status)
-        )
+        mutableStateOf(BookStatus.fromStorage(book.status))
+    }
+    var progress by remember(book.key, book.readingProgressPercent) {
+        mutableStateOf(book.readingProgressPercent.coerceIn(0, 100))
     }
 
     AlertDialog(
@@ -799,17 +724,57 @@ private fun BookManageDialog(
         },
         text = {
             Column {
-                Text("Move to")
+                Text(
+                    text = "Reading progress: $progress%",
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Spacer(modifier = Modifier.height(8.dp))
+                ReadingProgressBar(progress = progress)
+                Slider(
+                    value = progress.toFloat(),
+                    onValueChange = { value ->
+                        progress = value.roundToInt().coerceIn(0, 100)
+                        selectedStatus = when {
+                            progress == 100 -> BookStatus.FINISHED
+                            selectedStatus == BookStatus.FINISHED ->
+                                BookStatus.IN_PROGRESS
+                            progress > 0 && selectedStatus == BookStatus.TO_READ ->
+                                BookStatus.IN_PROGRESS
+                            else -> selectedStatus
+                        }
+                    },
+                    valueRange = 0f..100f,
+                    steps = 99
+                )
+
+                if (selectedStatus == BookStatus.FINISHED) {
+                    Text(
+                        text = book.finishedAtEpochMillis?.let { timestamp ->
+                            "Finished reading: ${formatStoredDate(timestamp)}"
+                        } ?: "The finished-reading date will be set when saved.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Category")
                 BookStatusOptions(
                     selectedStatus = selectedStatus,
-                    onStatusSelected = {
-                        selectedStatus = it
+                    onStatusSelected = { status ->
+                        selectedStatus = status
+                        progress = when (status) {
+                            BookStatus.FINISHED -> 100
+                            BookStatus.TO_READ -> 0
+                            BookStatus.IN_PROGRESS ->
+                                progress.coerceIn(0, 99)
+                            BookStatus.ABANDONED ->
+                                progress.coerceIn(0, 99)
+                        }
                     }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-
                 TextButton(onClick = onRemove) {
                     Text(
                         text = "Remove book",
@@ -821,7 +786,7 @@ private fun BookManageDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onStatusChange(selectedStatus)
+                    onSave(selectedStatus, progress)
                 }
             ) {
                 Text("Save")
@@ -856,7 +821,6 @@ private fun BookStatusOptions(
                         onStatusSelected(status)
                     }
                 )
-
                 Text(bookStatusLabel(status))
             }
         }
@@ -864,16 +828,15 @@ private fun BookStatusOptions(
 }
 
 @Composable
-private fun BookDetailContent(
+private fun BookDetailScreen(
     book: SavedBookEntity,
     onBackClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
-    onStatusChange: (BookStatus) -> Unit,
+    onSaveReadingState: (status: BookStatus, progress: Int) -> Unit,
     onRemove: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
-
-    var isManageDialogVisible by remember {
+    var showManageDialog by remember {
         mutableStateOf(false)
     }
 
@@ -887,7 +850,6 @@ private fun BookDetailContent(
         TextButton(onClick = onBackClick) {
             Text("← Back")
         }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -897,7 +859,6 @@ private fun BookDetailContent(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
-
             TextButton(
                 onClick = {
                     onFavoriteClick(!book.isFavorite)
@@ -926,13 +887,9 @@ private fun BookDetailContent(
                 BookCover(
                     coverId = book.coverId,
                     title = book.title,
-                    modifier = Modifier.size(
-                        width = 180.dp,
-                        height = 270.dp
-                    )
+                    modifier = Modifier.size(width = 180.dp, height = 270.dp)
                 )
             }
-
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
@@ -941,7 +898,6 @@ private fun BookDetailContent(
                     fontWeight = FontWeight.Bold
                 )
             }
-
             if (book.authors.isNotBlank()) {
                 item {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -951,7 +907,21 @@ private fun BookDetailContent(
                     )
                 }
             }
-
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text(
+                    text = "Reading progress: ${
+                        book.readingProgressPercent.coerceIn(0, 100)
+                    }%",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                ReadingProgressBar(
+                    progress = book.readingProgressPercent
+                )
+            }
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 DetailLine(
@@ -961,7 +931,6 @@ private fun BookDetailContent(
                     )
                 )
             }
-
             book.firstPublishYear?.let { year ->
                 item {
                     DetailLine(
@@ -970,28 +939,34 @@ private fun BookDetailContent(
                     )
                 }
             }
-
             item {
                 DetailLine(
                     label = "Editions",
                     value = book.editionCount.toString()
                 )
             }
-
             item {
                 DetailLine(
                     label = "Date added",
-                    value = formatAddedDate(
-                        book.addedAtEpochMillis
-                    )
+                    value = formatStoredDate(book.addedAtEpochMillis)
                 )
             }
-
+            if (
+                book.readingProgressPercent >= 100 ||
+                BookStatus.fromStorage(book.status) == BookStatus.FINISHED
+            ) {
+                item {
+                    DetailLine(
+                        label = "Finished reading",
+                        value = formatStoredDate(book.finishedAtEpochMillis)
+                    )
+                }
+            }
             item {
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(
                     onClick = {
-                        isManageDialogVisible = true
+                        showManageDialog = true
                     }
                 ) {
                     Text("Manage book")
@@ -1000,21 +975,50 @@ private fun BookDetailContent(
         }
     }
 
-    if (isManageDialogVisible) {
+    if (showManageDialog) {
         BookManageDialog(
             book = book,
-            onStatusChange = { status ->
-                onStatusChange(status)
-                isManageDialogVisible = false
+            onSave = { status, progress ->
+                onSaveReadingState(status, progress)
+                showManageDialog = false
             },
             onRemove = {
                 onRemove()
-                isManageDialogVisible = false
+                showManageDialog = false
             },
             onCancel = {
-                isManageDialogVisible = false
+                showManageDialog = false
             }
         )
+    }
+}
+
+@Composable
+private fun ReadingProgressBar(
+    progress: Int,
+    compact: Boolean = false
+) {
+    val clampedProgress = progress.coerceIn(0, 100)
+    val fraction = clampedProgress / 100f
+    val progressColor = readingProgressColor(clampedProgress)
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        LinearProgressIndicator(
+            progress = { fraction },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (compact) 5.dp else 12.dp),
+            color = progressColor,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+        if (compact) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "$clampedProgress%",
+                style = MaterialTheme.typography.labelSmall,
+                color = progressColor
+            )
+        }
     }
 }
 
@@ -1052,10 +1056,7 @@ private fun BookCover(
     }
 
     if (coverUrl == null) {
-        BookCoverPlaceholder(
-            title = title,
-            modifier = modifier
-        )
+        BookCoverPlaceholder(title = title, modifier = modifier)
         return
     }
 
@@ -1073,9 +1074,7 @@ private fun BookCover(
         contentAlignment = Alignment.Center
     ) {
         AsyncImage(
-            model = ImageRequest.Builder(
-                LocalContext.current
-            )
+            model = ImageRequest.Builder(LocalContext.current)
                 .data(coverUrl)
                 .crossfade(true)
                 .build(),
@@ -1103,7 +1102,6 @@ private fun BookCover(
                     strokeWidth = 2.dp
                 )
             }
-
             hasError -> {
                 BookCoverPlaceholder(
                     title = title,
@@ -1135,23 +1133,29 @@ private fun BookCoverPlaceholder(
     }
 }
 
+private fun normalizeProgress(
+    status: BookStatus,
+    progress: Int
+): Int = when (status) {
+    BookStatus.FINISHED -> 100
+    BookStatus.TO_READ -> 0
+    BookStatus.IN_PROGRESS,
+    BookStatus.ABANDONED -> progress.coerceIn(0, 99)
+}
+
+private fun readingProgressColor(progress: Int): Color {
+    val fraction = progress.coerceIn(0, 100) / 100f
+    return Color(
+        red = 1f - fraction,
+        green = fraction,
+        blue = 0f,
+        alpha = 1f
+    )
+}
+
 private fun bookStatusLabel(status: BookStatus): String = when (status) {
     BookStatus.IN_PROGRESS -> "En cours"
     BookStatus.FINISHED -> "Livre terminé"
     BookStatus.TO_READ -> "Livre à lire"
     BookStatus.ABANDONED -> "Livre abandonné"
-}
-
-private fun formatAddedDate(epochMillis: Long): String {
-    if (epochMillis <= 0L) {
-        return "Unknown"
-    }
-
-    return Instant
-        .ofEpochMilli(epochMillis)
-        .atZone(ZoneId.systemDefault())
-        .toLocalDate()
-        .format(
-            DateTimeFormatter.ofPattern("dd MMM yyyy")
-        )
 }
