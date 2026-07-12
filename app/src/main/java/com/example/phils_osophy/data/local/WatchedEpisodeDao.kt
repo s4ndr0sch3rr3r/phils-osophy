@@ -19,6 +19,9 @@ interface WatchedEpisodeDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun markWatched(episode: WatchedEpisodeEntity)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun markWatched(episodes: List<WatchedEpisodeEntity>)
+
     @Query(
         "DELETE FROM watched_episodes " +
             "WHERE seriesId = :seriesId " +
