@@ -324,10 +324,6 @@ private fun BookLibraryScreen(
             .navigationBarsPadding()
             .padding(16.dp)
     ) {
-        TextButton(onClick = onBackClick) {
-            Text("← Back")
-        }
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically

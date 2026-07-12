@@ -171,10 +171,6 @@ fun GameLibraryScreen(
             .navigationBarsPadding()
             .padding(16.dp)
     ) {
-        TextButton(onClick = onBackClick) {
-            Text("← Back")
-        }
-
         Text(
             text = "Games",
             style = MaterialTheme.typography.headlineMedium
