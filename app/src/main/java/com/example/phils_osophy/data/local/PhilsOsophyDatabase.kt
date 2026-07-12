@@ -12,9 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedMovieEntity::class,
         SavedSeriesEntity::class,
         WatchedEpisodeEntity::class,
-        SavedGameEntity::class
+        SavedGameEntity::class,
+        SavedBookEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -26,6 +27,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
     abstract fun watchedEpisodeDao(): WatchedEpisodeDao
 
     abstract fun savedGameDao(): SavedGameDao
+
+    abstract fun savedBookDao(): SavedBookDao
 
     companion object {
         @Volatile
@@ -117,6 +120,24 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration7To8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS saved_books (" +
+                        "`key` TEXT NOT NULL, " +
+                        "title TEXT NOT NULL, " +
+                        "authors TEXT NOT NULL, " +
+                        "firstPublishYear INTEGER, " +
+                        "coverId INTEGER, " +
+                        "editionCount INTEGER NOT NULL, " +
+                        "addedAtEpochMillis INTEGER NOT NULL DEFAULT 0, " +
+                        "status TEXT NOT NULL, " +
+                        "isFavorite INTEGER NOT NULL DEFAULT 0, " +
+                        "PRIMARY KEY(`key`))"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -130,7 +151,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration3To4,
                         migration4To5,
                         migration5To6,
-                        migration6To7
+                        migration6To7,
+                        migration7To8
                     )
                     .build()
                     .also { database ->
