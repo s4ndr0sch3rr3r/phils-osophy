@@ -216,16 +216,14 @@ fun MovieSearchScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         if (showFavoritesOnly || !hasSearched) {
-            Text(
-                text = if (showFavoritesOnly) {
-                    "My favorites"
-                } else {
-                    "My movie list"
-                },
-                style = MaterialTheme.typography.titleLarge
-            )
+            if (showFavoritesOnly) {
+                Text(
+                    text = "My favorites",
+                    style = MaterialTheme.typography.titleLarge
+                )
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             SavedMovieGrid(
                 movies = visibleSavedMovies,
