@@ -1,0 +1,28 @@
+name: Format movie title wrapper
+
+on:
+  push:
+    branches:
+      - agent/unified-media-card-titles
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/unified-media-card-titles
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/format_movie_title_wrapper.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt
+          git commit -m "Format movie title wrapper"
+          git push
