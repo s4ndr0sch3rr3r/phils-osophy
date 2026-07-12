@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,7 +32,7 @@ private val UserRatingBadgeColor = Color(0xFFD32F2F)
 private val SelectedRatingStarColor = Color(0xFFFFC107)
 
 @Composable
-fun UserRatingBadge(
+fun BoxScope.UserRatingBadge(
     rating: Int,
     modifier: Modifier = Modifier
 ) {
@@ -39,6 +40,7 @@ fun UserRatingBadge(
 
     Box(
         modifier = modifier
+            .align(Alignment.TopEnd)
             .size(30.dp)
             .clip(CircleShape)
             .background(UserRatingBadgeColor),
