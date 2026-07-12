@@ -47,17 +47,32 @@ class SeriesCompletionTracker(
             return
         }
 
-        watchedEpisodeDao.markWatched(
-            (1..episodeCount).map { episodeNumber ->
-                WatchedEpisodeEntity(
-                    seriesId = seriesId,
-                    seasonNumber = seasonNumber,
-                    episodeNumber = episodeNumber
-                )
+        val watchedCount = watchedEpisodeDao
+            .getForSeries(seriesId)
+            .count { episode ->
+                episode.seasonNumber == seasonNumber &&
+                    episode.episodeNumber in 1..episodeCount
             }
-        )
+        val shouldMarkWatched = watchedCount < episodeCount
 
-        moveToInProgressIfNeeded(seriesId)
+        if (shouldMarkWatched) {
+            watchedEpisodeDao.markWatched(
+                (1..episodeCount).map { episodeNumber ->
+                    WatchedEpisodeEntity(
+                        seriesId = seriesId,
+                        seasonNumber = seasonNumber,
+                        episodeNumber = episodeNumber
+                    )
+                }
+            )
+            moveToInProgressIfNeeded(seriesId)
+        } else {
+            watchedEpisodeDao.markSeasonUnwatched(
+                seriesId = seriesId,
+                seasonNumber = seasonNumber
+            )
+        }
+
         synchronizeStatus(seriesId)
     }
 
