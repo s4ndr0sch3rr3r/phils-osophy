@@ -615,7 +615,7 @@ private fun SavedBookCard(
             Text(
                 text = if (book.isFavorite) "♥" else "♡",
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
+                    .align(Alignment.TopStart)
                     .padding(6.dp)
                     .clickable(onClick = onFavoriteClick),
                 color = if (book.isFavorite) {
