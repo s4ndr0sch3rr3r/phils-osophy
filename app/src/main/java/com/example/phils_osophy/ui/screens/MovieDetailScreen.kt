@@ -14,11 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedMovieEntity
 import com.example.phils_osophy.data.remote.MovieDetailsDto
 import com.example.phils_osophy.data.remote.TmdbClient
@@ -46,6 +50,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 private const val TMDB_BACKDROP_BASE_URL =
     "https://image.tmdb.org/t/p/w780"
@@ -73,6 +78,12 @@ fun MovieDetailScreen(
     var isRatingDialogVisible by remember {
         mutableStateOf(false)
     }
+    var comment by remember(movie.id, movie.note) {
+        mutableStateOf(movie.note)
+    }
+
+    val applicationContext = LocalContext.current.applicationContext
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(movie.id) {
         isLoading = true
@@ -328,6 +339,50 @@ fun MovieDetailScreen(
                 },
                 style = MaterialTheme.typography.bodyLarge
             )
+        }
+
+        HorizontalDivider()
+
+        Column(
+            modifier = Modifier.padding(24.dp)
+        ) {
+            Text(
+                text = "Your comment",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Comment") },
+                minLines = 3,
+                maxLines = 8
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    val savedComment = comment.trim()
+                    comment = savedComment
+                    coroutineScope.launch {
+                        PhilsOsophyDatabase
+                            .getInstance(applicationContext)
+                            .savedMovieDao()
+                            .updateNote(
+                                movieId = movie.id,
+                                note = savedComment
+                            )
+                    }
+                },
+                enabled = comment.trim() != movie.note
+            ) {
+                Text("Save comment")
+            }
         }
     }
 
