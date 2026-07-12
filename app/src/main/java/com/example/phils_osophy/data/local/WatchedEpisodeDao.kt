@@ -41,6 +41,16 @@ interface WatchedEpisodeDao {
         episodeNumber: Int
     )
 
+    @Query(
+        "DELETE FROM watched_episodes " +
+            "WHERE seriesId = :seriesId " +
+            "AND seasonNumber = :seasonNumber"
+    )
+    suspend fun markSeasonUnwatched(
+        seriesId: Int,
+        seasonNumber: Int
+    )
+
     @Query("DELETE FROM watched_episodes WHERE seriesId = :seriesId")
     suspend fun deleteForSeries(seriesId: Int)
 }
