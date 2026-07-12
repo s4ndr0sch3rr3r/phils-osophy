@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +48,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.local.WatchedEpisodeKey
@@ -55,6 +57,7 @@ import com.example.phils_osophy.data.remote.SeasonDetailsDto
 import com.example.phils_osophy.data.remote.SeasonSummaryDto
 import com.example.phils_osophy.data.remote.SeriesDetailsDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.util.formatStoredDate
 import kotlinx.coroutines.launch
 
 private const val TMDB_SERIES_BACKDROP_BASE_URL =
@@ -99,13 +102,35 @@ fun SeriesDetailScreen(
     var loadingSeasonNumber by remember(series.id) {
         mutableStateOf<Int?>(null)
     }
+
     val seasonCache = remember(series.id) {
         mutableStateMapOf<Int, SeasonDetailsDto>()
     }
     val applicationContext = LocalContext.current.applicationContext
+    val database = remember(applicationContext) {
+        PhilsOsophyDatabase.getInstance(applicationContext)
+    }
     val completionTracker = remember(applicationContext) {
         SeriesCompletionTracker(applicationContext)
     }
+    val watchedEpisodeFlow = remember(database, series.id) {
+        database.watchedEpisodeDao().observeForSeries(series.id)
+    }
+    val watchedEpisodeRecords by watchedEpisodeFlow.collectAsState(
+        initial = emptyList()
+    )
+    val watchedEpisodeDates = watchedEpisodeRecords.associate { record ->
+        WatchedEpisodeKey(
+            seasonNumber = record.seasonNumber,
+            episodeNumber = record.episodeNumber
+        ) to record.watchedAtEpochMillis
+    }
+    val effectiveWatchedEpisodes =
+        watchedEpisodes + watchedEpisodeDates.keys
+    val seriesCompletedAtEpochMillis = seriesCompletionTimestamp(
+        details = details,
+        watchedEpisodeDates = watchedEpisodeDates
+    )
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(series.id) {
@@ -284,6 +309,8 @@ fun SeriesDetailScreen(
                 SeriesInfoTab(
                     series = series,
                     details = details,
+                    completedAtEpochMillis =
+                        seriesCompletedAtEpochMillis,
                     errorMessage = errorMessage
                 )
             }
@@ -299,7 +326,8 @@ fun SeriesDetailScreen(
                     expandedSeasonNumber = expandedSeasonNumber,
                     loadingSeasonNumber = loadingSeasonNumber,
                     seasonCache = seasonCache,
-                    watchedEpisodes = watchedEpisodes,
+                    watchedEpisodes = effectiveWatchedEpisodes,
+                    watchedEpisodeDates = watchedEpisodeDates,
                     onSeasonClick = { seasonNumber ->
                         expandedSeasonNumber =
                             if (expandedSeasonNumber == seasonNumber) {
@@ -308,7 +336,9 @@ fun SeriesDetailScreen(
                                 seasonNumber
                             }
                     },
-                    onSeasonWatchedClick = { seasonNumber, episodeCount ->
+                    onSeasonWatchedClick = {
+                            seasonNumber,
+                            episodeCount ->
                         coroutineScope.launch {
                             completionTracker.markSeasonWatched(
                                 seriesId = series.id,
@@ -318,9 +348,10 @@ fun SeriesDetailScreen(
                         }
                     },
                     onEpisodeClick = onEpisodeClick,
-                    onWatchedChange = { seasonNumber, episodeNumber, watched ->
-                        // Preserve the existing callback while centralizing the
-                        // progress/status transaction in the tracker.
+                    onWatchedChange = {
+                            seasonNumber,
+                            episodeNumber,
+                            watched ->
                         onWatchedChange(
                             seasonNumber,
                             episodeNumber,
@@ -345,6 +376,7 @@ fun SeriesDetailScreen(
 private fun SeriesInfoTab(
     series: SavedSeriesEntity,
     details: SeriesDetailsDto?,
+    completedAtEpochMillis: Long?,
     errorMessage: String?
 ) {
     LazyColumn(
@@ -398,6 +430,22 @@ private fun SeriesInfoTab(
 
         item {
             DetailValue(
+                label = "Added to app",
+                value = formatStoredDate(series.addedAtEpochMillis)
+            )
+        }
+
+        item {
+            DetailValue(
+                label = "Completed",
+                value = completedAtEpochMillis
+                    ?.let(::formatStoredDate)
+                    ?: "Not completed"
+            )
+        }
+
+        item {
+            DetailValue(
                 label = "Status",
                 value = details
                     ?.status
@@ -434,6 +482,7 @@ private fun EpisodesTab(
     loadingSeasonNumber: Int?,
     seasonCache: Map<Int, SeasonDetailsDto>,
     watchedEpisodes: Set<WatchedEpisodeKey>,
+    watchedEpisodeDates: Map<WatchedEpisodeKey, Long>,
     onSeasonClick: (Int) -> Unit,
     onSeasonWatchedClick: (
         seasonNumber: Int,
@@ -473,15 +522,23 @@ private fun EpisodesTab(
             val watchedCount = watchedEpisodes.count { watched ->
                 watched.seasonNumber == season.seasonNumber
             }
+            val completedAtEpochMillis = seasonCompletionTimestamp(
+                season = season,
+                watchedEpisodeDates = watchedEpisodeDates
+            )
             val isSeasonWatched =
-                season.episodeCount > 0 &&
-                    watchedCount >= season.episodeCount
+                completedAtEpochMillis != null ||
+                    (
+                        season.episodeCount > 0 &&
+                            watchedCount >= season.episodeCount
+                        )
 
             SeasonHeader(
                 season = season,
                 watchedCount = watchedCount,
                 isExpanded = isExpanded,
                 isSeasonWatched = isSeasonWatched,
+                completedAtEpochMillis = completedAtEpochMillis,
                 onClick = {
                     onSeasonClick(season.seasonNumber)
                 },
@@ -508,7 +565,8 @@ private fun EpisodesTab(
 
                     seasonCache[season.seasonNumber] == null -> {
                         Text(
-                            text = "Tap the season again to retry loading.",
+                            text =
+                                "Tap the season again to retry loading.",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -558,6 +616,7 @@ private fun SeasonHeader(
     watchedCount: Int,
     isExpanded: Boolean,
     isSeasonWatched: Boolean,
+    completedAtEpochMillis: Long?,
     onClick: () -> Unit,
     onWatchedClick: () -> Unit
 ) {
@@ -586,6 +645,18 @@ private fun SeasonHeader(
                     text = "$watchedCount/${season.episodeCount} watched",
                     style = MaterialTheme.typography.bodyMedium
                 )
+
+                if (completedAtEpochMillis != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Completed ${
+                            formatStoredDate(completedAtEpochMillis)
+                        }",
+                        style = MaterialTheme.typography.bodySmall,
+                        color =
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Box(
@@ -729,6 +800,52 @@ private fun EpisodeRow(
             }
         }
     }
+}
+
+private fun seasonCompletionTimestamp(
+    season: SeasonSummaryDto,
+    watchedEpisodeDates: Map<WatchedEpisodeKey, Long>
+): Long? {
+    if (season.episodeCount <= 0) {
+        return null
+    }
+
+    val watchedDates = (1..season.episodeCount).map { episodeNumber ->
+        watchedEpisodeDates[
+            WatchedEpisodeKey(
+                seasonNumber = season.seasonNumber,
+                episodeNumber = episodeNumber
+            )
+        ] ?: return null
+    }
+
+    return watchedDates.maxOrNull()
+}
+
+private fun seriesCompletionTimestamp(
+    details: SeriesDetailsDto?,
+    watchedEpisodeDates: Map<WatchedEpisodeKey, Long>
+): Long? {
+    val seasons = details
+        ?.seasons
+        .orEmpty()
+        .filter { season ->
+            season.seasonNumber > 0 &&
+                season.episodeCount > 0
+        }
+
+    if (seasons.isEmpty()) {
+        return null
+    }
+
+    val completedDates = seasons.map { season ->
+        seasonCompletionTimestamp(
+            season = season,
+            watchedEpisodeDates = watchedEpisodeDates
+        ) ?: return null
+    }
+
+    return completedDates.maxOrNull()
 }
 
 private fun seriesSubtitle(details: SeriesDetailsDto?): String {
