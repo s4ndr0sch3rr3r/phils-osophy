@@ -311,15 +311,18 @@ fun SeriesLibraryScreen(
                             modifier = Modifier.align(Alignment.Center)
                         )
                     }
+
                     errorMessage != null -> {
                         Text(
                             text = errorMessage.orEmpty(),
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+
                     searchResults.isEmpty() -> {
                         Text("No series found.")
                     }
+
                     else -> {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
@@ -394,8 +397,8 @@ private fun LibrarySection(
     ) -> Unit,
     onManageClick: (SavedSeriesEntity) -> Unit
 ) {
-    var isExpanded by remember(title) {
-        mutableStateOf(true)
+    var showFullList by remember(title) {
+        mutableStateOf(false)
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -403,7 +406,7 @@ private fun LibrarySection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable {
-                    isExpanded = !isExpanded
+                    showFullList = !showFullList
                 }
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -415,30 +418,34 @@ private fun LibrarySection(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = if (isExpanded) "⌄" else "›",
+                text = if (showFullList) "⌃" else "⌄",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        AnimatedVisibility(visible = isExpanded) {
-            Column {
-                Spacer(modifier = Modifier.height(10.dp))
-                if (series.isEmpty()) {
-                    Text(
-                        text = "No series in this category.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    LazyRow(
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (series.isEmpty()) {
+            Text(
+                text = "No series in this category.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            return
+        }
+
+        if (showFullList) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                series.chunked(2).forEach { rowSeries ->
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 8.dp)
+                        verticalAlignment = Alignment.Top
                     ) {
-                        items(
-                            items = series,
-                            key = { savedSeries -> savedSeries.id }
-                        ) { savedSeries ->
+                        rowSeries.forEach { savedSeries ->
                             LibrarySeriesPoster(
                                 series = savedSeries,
                                 onClick = {
@@ -456,6 +463,33 @@ private fun LibrarySection(
                             )
                         }
                     }
+                }
+            }
+        } else {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(end = 8.dp)
+            ) {
+                items(
+                    items = series,
+                    key = { savedSeries -> savedSeries.id }
+                ) { savedSeries ->
+                    LibrarySeriesPoster(
+                        series = savedSeries,
+                        onClick = {
+                            onSeriesClick(savedSeries.id)
+                        },
+                        onFavoriteClick = {
+                            onFavoriteClick(
+                                savedSeries.id,
+                                !savedSeries.isFavorite
+                            )
+                        },
+                        onManageClick = {
+                            onManageClick(savedSeries)
+                        }
+                    )
                 }
             }
         }
