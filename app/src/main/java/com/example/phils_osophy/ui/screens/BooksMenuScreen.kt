@@ -28,6 +28,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -147,6 +148,15 @@ fun BooksMenuScreen(
         }
     }
 
+    fun updateComment(bookKey: String, comment: String) {
+        coroutineScope.launch {
+            savedBookDao.updateNote(
+                bookKey = bookKey,
+                note = comment
+            )
+        }
+    }
+
     if (selectedBookKey != null) {
         if (selectedBook == null) {
             EmptyPageScreen(
@@ -179,6 +189,9 @@ fun BooksMenuScreen(
                             userRating = rating.coerceIn(0, 10)
                         )
                     }
+                },
+                onSaveComment = { comment ->
+                    updateComment(selectedBook.key, comment)
                 },
                 onRemove = {
                     coroutineScope.launch {
@@ -225,6 +238,7 @@ fun BooksMenuScreen(
                 )
             }
         },
+        onSaveComment = ::updateComment,
         onRemoveBook = { bookKey ->
             coroutineScope.launch {
                 savedBookDao.deleteByKey(bookKey)
@@ -249,6 +263,7 @@ private fun BookLibraryScreen(
         progress: Int
     ) -> Unit,
     onChangeRating: (bookKey: String, rating: Int) -> Unit,
+    onSaveComment: (bookKey: String, comment: String) -> Unit,
     onRemoveBook: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
@@ -268,6 +283,9 @@ private fun BookLibraryScreen(
         mutableStateOf<SavedBookEntity?>(null)
     }
     var ratingBook by remember {
+        mutableStateOf<SavedBookEntity?>(null)
+    }
+    var commentBook by remember {
         mutableStateOf<SavedBookEntity?>(null)
     }
 
@@ -527,6 +545,10 @@ private fun BookLibraryScreen(
                 ratingBook = book
                 managedBook = null
             },
+            onChangeComment = {
+                commentBook = book
+                managedBook = null
+            },
             onRemove = {
                 onRemoveBook(book.key)
                 managedBook = null
@@ -547,6 +569,20 @@ private fun BookLibraryScreen(
             },
             onCancel = {
                 ratingBook = null
+            }
+        )
+    }
+
+    commentBook?.let { book ->
+        MediaCommentDialog(
+            mediaKey = book.key,
+            initialComment = book.note,
+            onSave = { comment ->
+                onSaveComment(book.key, comment)
+                commentBook = null
+            },
+            onCancel = {
+                commentBook = null
             }
         )
     }
@@ -774,6 +810,7 @@ private fun BookManageDialog(
     book: SavedBookEntity,
     onSave: (status: BookStatus, progress: Int) -> Unit,
     onChangeRating: () -> Unit,
+    onChangeComment: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -850,6 +887,15 @@ private fun BookManageDialog(
                         }
                     )
                 }
+                TextButton(onClick = onChangeComment) {
+                    Text(
+                        if (book.note.isBlank()) {
+                            "Add comment"
+                        } else {
+                            "Edit comment"
+                        }
+                    )
+                }
                 TextButton(onClick = onRemove) {
                     Text(
                         text = "Remove book",
@@ -909,6 +955,7 @@ private fun BookDetailScreen(
     onFavoriteClick: (Boolean) -> Unit,
     onSaveReadingState: (status: BookStatus, progress: Int) -> Unit,
     onChangeRating: (Int) -> Unit,
+    onSaveComment: (String) -> Unit,
     onRemove: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
@@ -916,6 +963,9 @@ private fun BookDetailScreen(
         mutableStateOf(false)
     }
     var showRatingDialog by remember(book.key) {
+        mutableStateOf(false)
+    }
+    var showCommentDialog by remember(book.key) {
         mutableStateOf(false)
     }
 
@@ -1054,6 +1104,17 @@ private fun BookDetailScreen(
                     Text("Manage book")
                 }
             }
+            item {
+                Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider()
+                EditableMediaCommentSection(
+                    mediaKey = book.key,
+                    savedComment = book.note,
+                    onSave = onSaveComment,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = 0.dp
+                )
+            }
         }
     }
 
@@ -1067,6 +1128,10 @@ private fun BookDetailScreen(
             onChangeRating = {
                 showManageDialog = false
                 showRatingDialog = true
+            },
+            onChangeComment = {
+                showManageDialog = false
+                showCommentDialog = true
             },
             onRemove = {
                 onRemove()
@@ -1090,6 +1155,19 @@ private fun BookDetailScreen(
         )
     }
 
+    if (showCommentDialog) {
+        MediaCommentDialog(
+            mediaKey = book.key,
+            initialComment = book.note,
+            onSave = { comment ->
+                onSaveComment(comment)
+                showCommentDialog = false
+            },
+            onCancel = {
+                showCommentDialog = false
+            }
+        )
+    }
 }
 
 @Composable
@@ -1143,7 +1221,6 @@ private fun DetailLine(
         )
     }
 }
-
 
 @Composable
 private fun BookCover(
@@ -1255,7 +1332,7 @@ private fun readingProgressColor(progress: Int): Color {
 
 private fun bookStatusLabel(status: BookStatus): String = when (status) {
     BookStatus.IN_PROGRESS -> "En cours"
-    BookStatus.FINISHED -> "Livre terminé"
-    BookStatus.TO_READ -> "Livre à lire"
-    BookStatus.ABANDONED -> "Livre abandonné"
+    BookStatus.FINISHED -> "Livres terminés"
+    BookStatus.TO_READ -> "Livres à lire"
+    BookStatus.ABANDONED -> "Livres abandonnés"
 }
