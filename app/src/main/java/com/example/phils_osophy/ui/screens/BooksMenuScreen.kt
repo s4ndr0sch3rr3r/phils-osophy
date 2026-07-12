@@ -677,14 +677,7 @@ private fun SavedBookCard(
             )
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            text = book.title,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
+        MediaCardTitle(title = book.title)
         Spacer(modifier = Modifier.height(6.dp))
         ReadingProgressBar(
             progress = book.readingProgressPercent,

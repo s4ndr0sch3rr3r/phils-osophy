@@ -620,12 +620,7 @@ private fun LibrarySeriesPoster(
                 )
             }
 
-            Text(
-                text = series.name,
-                modifier = Modifier.padding(8.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            MediaCardTitle(title = series.name)
         }
     }
 }

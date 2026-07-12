@@ -165,9 +165,10 @@ private fun MoviePosterTile(
         mutableStateOf(false)
     }
 
-    Card(
-        onClick = onClick,
-        modifier = Modifier
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(2f / 3f)
     ) {
@@ -265,6 +266,9 @@ private fun MoviePosterTile(
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+
+        MediaCardTitle(title = movie.title)
     }
 
     if (showManageDialog) {
