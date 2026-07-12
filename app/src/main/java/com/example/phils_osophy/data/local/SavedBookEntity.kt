@@ -23,7 +23,7 @@ data class SavedBookEntity(
     val readingProgressPercent: Int,
     val finishedAtEpochMillis: Long?,
     @ColumnInfo(defaultValue = "0")
-    val userRating: Int
+    val userRating: Int = 0
 )
 
 enum class BookStatus {
