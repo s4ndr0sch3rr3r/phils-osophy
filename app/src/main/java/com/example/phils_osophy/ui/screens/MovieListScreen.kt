@@ -104,8 +104,8 @@ fun SavedMovieGrid(
         columns = GridCells.Fixed(3),
         modifier = modifier,
         contentPadding = PaddingValues(bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         items(
             items = movies,
