@@ -16,6 +16,14 @@ interface TmdbApi {
         @Query("page") page: Int = 1
     ): MovieSearchResponse
 
+    @GET("search/tv")
+    suspend fun searchSeries(
+        @Query("query") query: String,
+        @Query("include_adult") includeAdult: Boolean = false,
+        @Query("language") language: String = "fr-FR",
+        @Query("page") page: Int = 1
+    ): SeriesSearchResponse
+
     @GET("movie/{movie_id}")
     suspend fun getMovieDetails(
         @Path("movie_id") movieId: Int,
