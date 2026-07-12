@@ -11,6 +11,12 @@ interface WatchedEpisodeDao {
 
     @Query(
         "SELECT * FROM watched_episodes " +
+            "ORDER BY seriesId, seasonNumber, episodeNumber"
+    )
+    fun observeAll(): Flow<List<WatchedEpisodeEntity>>
+
+    @Query(
+        "SELECT * FROM watched_episodes " +
             "WHERE seriesId = :seriesId " +
             "ORDER BY seasonNumber, episodeNumber"
     )

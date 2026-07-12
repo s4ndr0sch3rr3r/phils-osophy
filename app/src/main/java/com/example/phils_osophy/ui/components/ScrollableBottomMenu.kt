@@ -35,8 +35,7 @@ enum class BottomCategory(val label: String) {
     Series("Series"),
     Games("Games"),
     Books("Books"),
-    Explore("Explore"),
-    Profile("Profile")
+    Explore("Explore")
 }
 
 @Composable
