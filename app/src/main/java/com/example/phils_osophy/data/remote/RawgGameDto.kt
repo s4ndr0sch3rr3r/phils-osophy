@@ -11,7 +11,9 @@ data class RawgGameSearchResponse(
 @Serializable
 data class RawgGameSummaryDto(
     val id: Int,
-    val name: String = ""
+    val name: String = "",
+    @SerialName("background_image")
+    val backgroundImage: String? = null
 )
 
 @Serializable
