@@ -68,6 +68,7 @@ fun SeriesMenuScreen(
     finishedSeries: List<SavedSeriesEntity>,
     toWatchSeries: List<SavedSeriesEntity>,
     stoppedSeries: List<SavedSeriesEntity>,
+    onSeriesClick: (Int) -> Unit,
     onAddSeries: (SeriesDto, SeriesStatus) -> Unit,
     onStatusChange: (seriesId: Int, status: SeriesStatus) -> Unit,
     onFavoriteClick: (seriesId: Int, isFavorite: Boolean) -> Unit,
@@ -261,6 +262,9 @@ fun SeriesMenuScreen(
                             showFavoritesOnly = showFavoritesOnly
                         ),
                         onSeriesClick = { series ->
+                            onSeriesClick(series.id)
+                        },
+                        onManageClick = { series ->
                             managedSeries = series
                         },
                         onFavoriteClick = onFavoriteClick
@@ -275,6 +279,9 @@ fun SeriesMenuScreen(
                             showFavoritesOnly = showFavoritesOnly
                         ),
                         onSeriesClick = { series ->
+                            onSeriesClick(series.id)
+                        },
+                        onManageClick = { series ->
                             managedSeries = series
                         },
                         onFavoriteClick = onFavoriteClick
@@ -289,6 +296,9 @@ fun SeriesMenuScreen(
                             showFavoritesOnly = showFavoritesOnly
                         ),
                         onSeriesClick = { series ->
+                            onSeriesClick(series.id)
+                        },
+                        onManageClick = { series ->
                             managedSeries = series
                         },
                         onFavoriteClick = onFavoriteClick
@@ -303,6 +313,9 @@ fun SeriesMenuScreen(
                             showFavoritesOnly = showFavoritesOnly
                         ),
                         onSeriesClick = { series ->
+                            onSeriesClick(series.id)
+                        },
+                        onManageClick = { series ->
                             managedSeries = series
                         },
                         onFavoriteClick = onFavoriteClick
@@ -406,6 +419,7 @@ private fun SeriesSection(
     series: List<SavedSeriesEntity>,
     emptyMessage: String,
     onSeriesClick: (SavedSeriesEntity) -> Unit,
+    onManageClick: (SavedSeriesEntity) -> Unit,
     onFavoriteClick: (seriesId: Int, isFavorite: Boolean) -> Unit
 ) {
     Column(
@@ -440,6 +454,9 @@ private fun SeriesSection(
                         onClick = {
                             onSeriesClick(savedSeries)
                         },
+                        onManageClick = {
+                            onManageClick(savedSeries)
+                        },
                         onFavoriteClick = {
                             onFavoriteClick(
                                 savedSeries.id,
@@ -457,6 +474,7 @@ private fun SeriesSection(
 private fun SavedSeriesPoster(
     series: SavedSeriesEntity,
     onClick: () -> Unit,
+    onManageClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
     val posterUrl = series.posterPath
@@ -538,6 +556,22 @@ private fun SavedSeriesPoster(
                         Color.White
                     },
                     fontSize = 20.sp
+                )
+
+                Text(
+                    text = "•••",
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(50)
+                        )
+                        .clickable(onClick = onManageClick)
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
