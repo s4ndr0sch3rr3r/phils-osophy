@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.toSavedMovieEntity
+import com.example.phils_osophy.data.local.toSavedSeriesEntity
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.ui.components.AppScaffold
 import com.example.phils_osophy.ui.components.BottomCategory
@@ -36,25 +37,55 @@ fun App() {
     }
 
     val applicationContext = LocalContext.current.applicationContext
-    val savedMovieDao = remember(applicationContext) {
-        PhilsOsophyDatabase
-            .getInstance(applicationContext)
-            .savedMovieDao()
+    val database = remember(applicationContext) {
+        PhilsOsophyDatabase.getInstance(applicationContext)
     }
+    val savedMovieDao = remember(database) {
+        database.savedMovieDao()
+    }
+    val savedSeriesDao = remember(database) {
+        database.savedSeriesDao()
+    }
+
     val savedMoviesFlow = remember(savedMovieDao) {
         savedMovieDao.observeAll()
     }
     val savedMovieEntities by savedMoviesFlow.collectAsState(
         initial = emptyList()
     )
+
+    val inProgressSeriesFlow = remember(savedSeriesDao) {
+        savedSeriesDao.observeInProgress()
+    }
+    val inProgressSeries by inProgressSeriesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val finishedSeriesFlow = remember(savedSeriesDao) {
+        savedSeriesDao.observeFinished()
+    }
+    val finishedSeries by finishedSeriesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val toWatchSeriesFlow = remember(savedSeriesDao) {
+        savedSeriesDao.observeToWatch()
+    }
+    val toWatchSeries by toWatchSeriesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val stoppedSeriesFlow = remember(savedSeriesDao) {
+        savedSeriesDao.observeStopped()
+    }
+    val stoppedSeries by stoppedSeriesFlow.collectAsState(
+        initial = emptyList()
+    )
+
     val coroutineScope = rememberCoroutineScope()
 
     fun goBackToMainMenu() {
         currentScreen = AppScreen.MainMenu
-    }
-
-    fun goBackToSeriesMenu() {
-        currentScreen = AppScreen.SeriesMenu
     }
 
     fun goBackToBooksMenu() {
@@ -178,47 +209,39 @@ fun App() {
 
             AppScreen.SeriesMenu -> {
                 SeriesMenuScreen(
-                    onBackClick = ::goBackToMainMenu,
-                    onInProgressClick = {
-                        currentScreen = AppScreen.SeriesInProgress
+                    inProgressSeries = inProgressSeries,
+                    finishedSeries = finishedSeries,
+                    toWatchSeries = toWatchSeries,
+                    stoppedSeries = stoppedSeries,
+                    onAddSeries = { series, status ->
+                        coroutineScope.launch {
+                            savedSeriesDao.insert(
+                                series.toSavedSeriesEntity(status = status)
+                            )
+                        }
                     },
-                    onFinishedClick = {
-                        currentScreen = AppScreen.SeriesFinished
+                    onStatusChange = { seriesId, status ->
+                        coroutineScope.launch {
+                            savedSeriesDao.updateStatus(
+                                seriesId = seriesId,
+                                status = status.name
+                            )
+                        }
                     },
-                    onToWatchClick = {
-                        currentScreen = AppScreen.SeriesToWatch
+                    onFavoriteClick = { seriesId, isFavorite ->
+                        coroutineScope.launch {
+                            savedSeriesDao.updateFavorite(
+                                seriesId = seriesId,
+                                isFavorite = isFavorite
+                            )
+                        }
                     },
-                    onStoppedClick = {
-                        currentScreen = AppScreen.SeriesStopped
-                    }
-                )
-            }
-
-            AppScreen.SeriesInProgress -> {
-                EmptyPageScreen(
-                    title = "Séries en cours",
-                    onBackClick = ::goBackToSeriesMenu
-                )
-            }
-
-            AppScreen.SeriesFinished -> {
-                EmptyPageScreen(
-                    title = "Séries terminées",
-                    onBackClick = ::goBackToSeriesMenu
-                )
-            }
-
-            AppScreen.SeriesToWatch -> {
-                EmptyPageScreen(
-                    title = "Séries à regarder",
-                    onBackClick = ::goBackToSeriesMenu
-                )
-            }
-
-            AppScreen.SeriesStopped -> {
-                EmptyPageScreen(
-                    title = "Séries arrêtées",
-                    onBackClick = ::goBackToSeriesMenu
+                    onRemoveSeries = { seriesId ->
+                        coroutineScope.launch {
+                            savedSeriesDao.deleteById(seriesId)
+                        }
+                    },
+                    onBackClick = ::goBackToMainMenu
                 )
             }
 
@@ -317,11 +340,7 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.MoviesList,
     AppScreen.MovieDetail -> BottomCategory.Movies
 
-    AppScreen.SeriesMenu,
-    AppScreen.SeriesInProgress,
-    AppScreen.SeriesFinished,
-    AppScreen.SeriesToWatch,
-    AppScreen.SeriesStopped -> BottomCategory.Series
+    AppScreen.SeriesMenu -> BottomCategory.Series
 
     AppScreen.Explore -> BottomCategory.Explore
     AppScreen.Profile -> BottomCategory.Profile
