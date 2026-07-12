@@ -1,0 +1,474 @@
+name: Apply movie comments feature
+
+on:
+  push:
+    branches:
+      - agent/movie-comments-menu-detail
+    paths:
+      - .github/trigger-movie-comments
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/movie-comments-menu-detail
+          fetch-depth: 0
+
+      - name: Apply source changes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = 1) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old[:100]!r}")
+              file.write_text(text.replace(old, new, count))
+
+          dao = "app/src/main/java/com/example/phils_osophy/data/local/SavedMovieDao.kt"
+          replace(
+              dao,
+              '''    @Query("DELETE FROM saved_movies WHERE id = :movieId")
+    suspend fun deleteById(movieId: Int)
+''',
+              '''    @Query(
+        "UPDATE saved_movies " +
+            "SET note = :note " +
+            "WHERE id = :movieId"
+    )
+    suspend fun updateNote(
+        movieId: Int,
+        note: String
+    )
+
+    @Query("DELETE FROM saved_movies WHERE id = :movieId")
+    suspend fun deleteById(movieId: Int)
+'''
+          )
+
+          add_dialog = "app/src/main/java/com/example/phils_osophy/ui/screens/AddMovieDialog.kt"
+          replace(add_dialog, 'Text("Note (optional)")', 'Text("Comment (optional)")')
+
+          search = "app/src/main/java/com/example/phils_osophy/ui/screens/MovieSearchScreen.kt"
+          replace(
+              search,
+              '''    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
+''',
+              '''    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onChangeComment: (movieId: Int, comment: String) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
+'''
+          )
+          replace(
+              search,
+              '''                onChangeRating = onChangeRating,
+                onRemoveMovie = onRemoveMovie,
+''',
+              '''                onChangeRating = onChangeRating,
+                onChangeComment = onChangeComment,
+                onRemoveMovie = onRemoveMovie,
+'''
+          )
+
+          movie_list = "app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt"
+          replace(
+              movie_list,
+              '''import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+''',
+              '''import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+'''
+          )
+          replace(
+              movie_list,
+              '''    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
+''',
+              '''    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onChangeComment: (movieId: Int, comment: String) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
+''',
+              2
+          )
+          replace(
+              movie_list,
+              '''            onChangeRating = onChangeRating,
+            onRemoveMovie = onRemoveMovie,
+''',
+              '''            onChangeRating = onChangeRating,
+            onChangeComment = onChangeComment,
+            onRemoveMovie = onRemoveMovie,
+'''
+          )
+          replace(
+              movie_list,
+              '''                onChangeRating = { rating ->
+                    onChangeRating(movie.id, rating)
+                },
+                onRemoveMovie = {
+''',
+              '''                onChangeRating = { rating ->
+                    onChangeRating(movie.id, rating)
+                },
+                onChangeComment = { comment ->
+                    onChangeComment(movie.id, comment)
+                },
+                onRemoveMovie = {
+'''
+          )
+          replace(
+              movie_list,
+              '''    onFavoriteClick: () -> Unit,
+    onChangeRating: (Int) -> Unit,
+    onRemoveMovie: () -> Unit
+''',
+              '''    onFavoriteClick: () -> Unit,
+    onChangeRating: (Int) -> Unit,
+    onChangeComment: (String) -> Unit,
+    onRemoveMovie: () -> Unit
+'''
+          )
+          replace(
+              movie_list,
+              '''    var showRatingDialog by remember(movie.id) {
+        mutableStateOf(false)
+    }
+''',
+              '''    var showRatingDialog by remember(movie.id) {
+        mutableStateOf(false)
+    }
+    var showCommentDialog by remember(movie.id) {
+        mutableStateOf(false)
+    }
+'''
+          )
+          replace(
+              movie_list,
+              '''            onChangeRating = {
+                showManageDialog = false
+                showRatingDialog = true
+            },
+            onRemove = {
+''',
+              '''            onChangeRating = {
+                showManageDialog = false
+                showRatingDialog = true
+            },
+            onChangeComment = {
+                showManageDialog = false
+                showCommentDialog = true
+            },
+            onRemove = {
+'''
+          )
+          replace(
+              movie_list,
+              '''    if (showRatingDialog) {
+        UserRatingDialog(
+''',
+              '''    if (showCommentDialog) {
+        MovieCommentDialog(
+            movie = movie,
+            onSave = { comment ->
+                onChangeComment(comment)
+                showCommentDialog = false
+            },
+            onCancel = {
+                showCommentDialog = false
+            }
+        )
+    }
+
+    if (showRatingDialog) {
+        UserRatingDialog(
+'''
+          )
+          replace(
+              movie_list,
+              '''    movie: SavedMovieEntity,
+    onChangeRating: () -> Unit,
+    onRemove: () -> Unit,
+''',
+              '''    movie: SavedMovieEntity,
+    onChangeRating: () -> Unit,
+    onChangeComment: () -> Unit,
+    onRemove: () -> Unit,
+'''
+          )
+          replace(
+              movie_list,
+              '''                TextButton(onClick = onChangeRating) {
+                    Text(
+                        if (movie.userRating in 1..10) {
+                            "Change rating"
+                        } else {
+                            "Add rating"
+                        }
+                    )
+                }
+                TextButton(onClick = onRemove) {
+''',
+              '''                TextButton(onClick = onChangeRating) {
+                    Text(
+                        if (movie.userRating in 1..10) {
+                            "Change rating"
+                        } else {
+                            "Add rating"
+                        }
+                    )
+                }
+                TextButton(onClick = onChangeComment) {
+                    Text(
+                        if (movie.note.isBlank()) {
+                            "Add comment"
+                        } else {
+                            "Edit comment"
+                        }
+                    )
+                }
+                TextButton(onClick = onRemove) {
+'''
+          )
+          file = Path(movie_list)
+          text = file.read_text()
+          text += '''
+
+@Composable
+private fun MovieCommentDialog(
+    movie: SavedMovieEntity,
+    onSave: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    var comment by remember(movie.id, movie.note) {
+        mutableStateOf(movie.note)
+    }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = {
+            Text(
+                if (movie.note.isBlank()) {
+                    "Add comment"
+                } else {
+                    "Edit comment"
+                }
+            )
+        },
+        text = {
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Comment") },
+                minLines = 3,
+                maxLines = 6
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(comment.trim()) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+'''
+          file.write_text(text)
+
+          detail = "app/src/main/java/com/example/phils_osophy/ui/screens/MovieDetailScreen.kt"
+          replace(
+              detail,
+              '''import androidx.compose.material3.DropdownMenu
+''',
+              '''import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+'''
+          )
+          replace(
+              detail,
+              '''import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+''',
+              '''import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+'''
+          )
+          replace(
+              detail,
+              '''    onFavoriteClick: (Boolean) -> Unit,
+    onChangeRating: (Int) -> Unit,
+    onRemoveMovieClick: () -> Unit
+''',
+              '''    onFavoriteClick: (Boolean) -> Unit,
+    onChangeRating: (Int) -> Unit,
+    onChangeComment: (String) -> Unit,
+    onRemoveMovieClick: () -> Unit
+'''
+          )
+          replace(
+              detail,
+              '''    var isRatingDialogVisible by remember {
+        mutableStateOf(false)
+    }
+''',
+              '''    var isRatingDialogVisible by remember {
+        mutableStateOf(false)
+    }
+    var comment by remember(movie.id, movie.note) {
+        mutableStateOf(movie.note)
+    }
+'''
+          )
+          replace(
+              detail,
+              '''            Text(
+                text = overview.ifBlank {
+                    "No movie information available."
+                },
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+
+    if (isRatingDialogVisible) {
+''',
+              '''            Text(
+                text = overview.ifBlank {
+                    "No movie information available."
+                },
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+
+        HorizontalDivider()
+
+        Column(
+            modifier = Modifier.padding(24.dp)
+        ) {
+            Text(
+                text = "Your comment",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = comment,
+                onValueChange = { comment = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Comment") },
+                minLines = 3,
+                maxLines = 8
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    val savedComment = comment.trim()
+                    comment = savedComment
+                    onChangeComment(savedComment)
+                },
+                enabled = comment.trim() != movie.note
+            ) {
+                Text("Save comment")
+            }
+        }
+    }
+
+    if (isRatingDialogVisible) {
+'''
+          )
+
+          app = "app/src/main/java/com/example/phils_osophy/App.kt"
+          replace(
+              app,
+              '''                    onChangeRating = { movieId, rating ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateRating(
+                                movieId = movieId,
+                                userRating = rating.coerceIn(0, 10)
+                            )
+                        }
+                    },
+                    onRemoveMovie = { movieId ->
+''',
+              '''                    onChangeRating = { movieId, rating ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateRating(
+                                movieId = movieId,
+                                userRating = rating.coerceIn(0, 10)
+                            )
+                        }
+                    },
+                    onChangeComment = { movieId, comment ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateNote(
+                                movieId = movieId,
+                                note = comment.trim()
+                            )
+                        }
+                    },
+                    onRemoveMovie = { movieId ->
+''',
+              2
+          )
+          replace(
+              app,
+              '''                        onChangeRating = { rating ->
+                            coroutineScope.launch {
+                                savedMovieDao.updateRating(
+                                    movieId = selectedMovie.id,
+                                    userRating = rating.coerceIn(0, 10)
+                                )
+                            }
+                        },
+                        onRemoveMovieClick = {
+''',
+              '''                        onChangeRating = { rating ->
+                            coroutineScope.launch {
+                                savedMovieDao.updateRating(
+                                    movieId = selectedMovie.id,
+                                    userRating = rating.coerceIn(0, 10)
+                                )
+                            }
+                        },
+                        onChangeComment = { comment ->
+                            coroutineScope.launch {
+                                savedMovieDao.updateNote(
+                                    movieId = selectedMovie.id,
+                                    note = comment.trim()
+                                )
+                            }
+                        },
+                        onRemoveMovieClick = {
+'''
+          )
+          PY
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          rm -f .github/trigger-movie-comments
+          rm -f .github/workflows/apply-movie-comments.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/phils_osophy .github
+          git commit -m "Add editable movie comments" || exit 0
+          git push origin HEAD:agent/movie-comments-menu-detail
