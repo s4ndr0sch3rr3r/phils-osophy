@@ -1,0 +1,43 @@
+name: Apply books menu cleanup
+
+on:
+  push:
+    branches:
+      - agent/series-full-category-list
+
+permissions:
+  contents: write
+
+jobs:
+  patch-books-menu:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/series-full-category-list
+          fetch-depth: 0
+
+      - name: Remove the top-level Books back button
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt")
+          text = path.read_text(encoding="utf-8")
+          block = '''        TextButton(onClick = onBackClick) {
+              Text("← Back")
+          }
+
+          '''
+          if block not in text:
+              raise SystemExit("Top-level Books back-button block was not found")
+          path.write_text(text.replace(block, "", 1), encoding="utf-8")
+
+      - name: Commit the Books cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          git commit -m "Remove books menu back button"
+          git push origin HEAD:agent/series-full-category-list
