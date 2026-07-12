@@ -46,7 +46,6 @@ import com.example.phils_osophy.data.local.SavedMovieEntity
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
 
-private val RatingBadgeColor = Color(0xFFD32F2F)
 private val FavoriteColor = Color(0xFFE53935)
 
 @Composable
@@ -223,24 +222,12 @@ private fun MoviePosterTile(
                 )
             }
 
-            if (movie.userRating in 1..10) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(30.dp)
-                        .clip(CircleShape)
-                        .background(RatingBadgeColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = movie.userRating.toString(),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            UserRatingBadge(
+                rating = movie.userRating,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(6.dp)
+            )
         }
     }
 }
