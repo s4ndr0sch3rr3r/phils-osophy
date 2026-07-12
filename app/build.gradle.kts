@@ -38,11 +38,20 @@ android {
             ?: providers.gradleProperty("TMDB_READ_TOKEN").orNull
             ?: providers.environmentVariable("TMDB_READ_TOKEN").orNull
             ?: error("TMDB_READ_TOKEN is missing")
+        val rawgApiKey = localProperties.getProperty("RAWG_API_KEY")
+            ?: providers.gradleProperty("RAWG_API_KEY").orNull
+            ?: providers.environmentVariable("RAWG_API_KEY").orNull
+            ?: ""
 
         buildConfigField(
             "String",
             "TMDB_READ_TOKEN",
             tmdbReadToken.toBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "RAWG_API_KEY",
+            rawgApiKey.toBuildConfigString()
         )
     }
 
