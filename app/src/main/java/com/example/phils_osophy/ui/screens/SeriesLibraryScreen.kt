@@ -533,12 +533,12 @@ private fun LibrarySeriesPoster(
         mutableStateOf(false)
     }
 
-    Card(
-        modifier = Modifier
-            .width(104.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Column {
+    Column(modifier = Modifier.width(104.dp)) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+        ) {
             Box(
                 modifier = Modifier
                     .size(width = 104.dp, height = 156.dp)
@@ -619,9 +619,9 @@ private fun LibrarySeriesPoster(
                     fontWeight = FontWeight.Bold
                 )
             }
-
-            MediaCardTitle(title = series.name)
         }
+
+        MediaCardTitle(title = series.name)
     }
 }
 
