@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -51,7 +53,9 @@ private const val TMDB_BACKDROP_BASE_URL =
 @Composable
 fun MovieDetailScreen(
     movie: SavedMovieEntity,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onFavoriteClick: (Boolean) -> Unit,
+    onRemoveMovieClick: () -> Unit
 ) {
     var details by remember(movie.id) {
         mutableStateOf<MovieDetailsDto?>(null)
@@ -60,6 +64,9 @@ fun MovieDetailScreen(
         mutableStateOf(true)
     }
     var hasError by remember(movie.id) {
+        mutableStateOf(false)
+    }
+    var isMenuExpanded by remember {
         mutableStateOf(false)
     }
 
@@ -166,6 +173,62 @@ fun MovieDetailScreen(
                     text = "← Back",
                     color = Color.White
                 )
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(end = 8.dp, top = 8.dp)
+            ) {
+                TextButton(
+                    onClick = {
+                        isMenuExpanded = true
+                    }
+                ) {
+                    Text(
+                        text = "•••",
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = isMenuExpanded,
+                    onDismissRequest = {
+                        isMenuExpanded = false
+                    }
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (movie.isFavorite) {
+                                    "Remove favorite"
+                                } else {
+                                    "Favorite"
+                                }
+                            )
+                        },
+                        onClick = {
+                            isMenuExpanded = false
+                            onFavoriteClick(!movie.isFavorite)
+                        }
+                    )
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Remove movie",
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        },
+                        onClick = {
+                            isMenuExpanded = false
+                            onRemoveMovieClick()
+                        }
+                    )
+                }
             }
 
             Column(
