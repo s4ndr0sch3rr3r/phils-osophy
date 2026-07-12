@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,8 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -33,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +51,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -56,6 +62,7 @@ import com.example.phils_osophy.BuildConfig
 import com.example.phils_osophy.data.local.SavedGameEntity
 import com.example.phils_osophy.data.remote.RawgClient
 import com.example.phils_osophy.data.remote.RawgGameDetailsDto
+import com.example.phils_osophy.data.remote.RawgGameSummaryDto
 import com.example.phils_osophy.ui.util.formatStoredDate
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -88,6 +95,48 @@ fun GameLibraryScreen(
     }
     var selectedGameId by remember {
         mutableStateOf<Long?>(null)
+    }
+
+    val apiKey = BuildConfig.RAWG_API_KEY.trim()
+    val rawgSummaries = remember {
+        mutableStateMapOf<Long, RawgGameSummaryDto?>()
+    }
+
+    LaunchedEffect(
+        games.map { game -> game.id to game.name },
+        apiKey
+    ) {
+        val activeGameIds = games.map { game -> game.id }.toSet()
+        rawgSummaries.keys
+            .filter { gameId -> gameId !in activeGameIds }
+            .forEach { staleGameId ->
+                rawgSummaries.remove(staleGameId)
+            }
+
+        if (apiKey.isBlank()) {
+            rawgSummaries.clear()
+            return@LaunchedEffect
+        }
+
+        games.forEach { game ->
+            if (!rawgSummaries.containsKey(game.id)) {
+                rawgSummaries[game.id] = try {
+                    val results = RawgClient.api.searchGames(
+                        apiKey = apiKey,
+                        query = game.name
+                    ).results
+
+                    results.firstOrNull { result ->
+                        result.name.equals(
+                            game.name,
+                            ignoreCase = true
+                        )
+                    } ?: results.firstOrNull()
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
     }
 
     val selectedGame = games.firstOrNull { game ->
@@ -143,7 +192,10 @@ fun GameLibraryScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = 14.dp
+                    ),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -167,6 +219,15 @@ fun GameLibraryScreen(
             style = MaterialTheme.typography.titleLarge
         )
 
+        if (apiKey.isBlank()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "Add RAWG_API_KEY to local.properties to load game images.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         if (games.isEmpty()) {
@@ -179,18 +240,23 @@ fun GameLibraryScreen(
                 Text("No games added yet.")
             }
         } else {
-            LazyColumn(
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                contentPadding = PaddingValues(bottom = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(
                     items = games,
                     key = { game -> game.id }
                 ) { game ->
-                    GameListItem(
+                    GamePosterCard(
                         game = game,
+                        imageUrl = rawgSummaries[game.id]
+                            ?.backgroundImage,
                         onClick = {
                             selectedGameId = game.id
                         }
@@ -202,7 +268,11 @@ fun GameLibraryScreen(
 
     if (showAddDialog) {
         AddGameDialog(
-            onAdd = { name, hoursPlayedMinutes, playerCount, isFinished ->
+            onAdd = {
+                    name,
+                    hoursPlayedMinutes,
+                    playerCount,
+                    isFinished ->
                 onAddGame(
                     name,
                     hoursPlayedMinutes,
@@ -219,50 +289,92 @@ fun GameLibraryScreen(
 }
 
 @Composable
-private fun GameListItem(
+private fun GamePosterCard(
     game: SavedGameEntity,
+    imageUrl: String?,
     onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            FinishedTick(
-                isFinished = game.isFinished,
-                isInteractive = false
-            )
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.35f)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (imageUrl.isNullOrBlank()) {
+                    Text(
+                        text = game.name,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                } else {
+                    AsyncImage(
+                        model = ImageRequest.Builder(
+                            LocalContext.current
+                        )
+                            .data(imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "${game.name} image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(8.dp)
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (game.isFinished) {
+                                FinishedGreen
+                            } else {
+                                UnfinishedGrey
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "✓",
+                        color = Color.White,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
 
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp)
+                modifier = Modifier.padding(10.dp)
             ) {
                 Text(
                     text = game.name,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
-                    text = "${formatHours(game.hoursPlayedMinutes)} · " +
-                        playerLabel(game.playerCount),
-                    style = MaterialTheme.typography.bodyMedium
+                    text = formatHours(game.hoursPlayedMinutes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            Text(
-                text = "›",
-                style = MaterialTheme.typography.headlineSmall
-            )
         }
     }
 }
@@ -302,11 +414,15 @@ private fun GameDetailContent(
                 query = game.name
             ).results
             val match = searchResults.firstOrNull { result ->
-                result.name.equals(game.name, ignoreCase = true)
+                result.name.equals(
+                    game.name,
+                    ignoreCase = true
+                )
             } ?: searchResults.firstOrNull()
 
             if (match == null) {
-                remoteError = "No matching game was found in RAWG."
+                remoteError =
+                    "No matching game was found in RAWG."
             } else {
                 rawgDetails = RawgClient.api.getGameDetails(
                     gameId = match.id,
@@ -336,7 +452,10 @@ private fun GameDetailContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = 12.dp,
+                    vertical = 8.dp
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             TextButton(onClick = onBackClick) {
@@ -401,7 +520,9 @@ private fun GameDetailContent(
             item {
                 GameDetailRow(
                     label = "Hours played",
-                    value = formatHours(game.hoursPlayedMinutes)
+                    value = formatHours(
+                        game.hoursPlayedMinutes
+                    )
                 )
             }
 
@@ -415,7 +536,9 @@ private fun GameDetailContent(
             item {
                 GameDetailRow(
                     label = "Date added",
-                    value = formatStoredDate(game.addedAtEpochMillis)
+                    value = formatStoredDate(
+                        game.addedAtEpochMillis
+                    )
                 )
             }
 
@@ -448,10 +571,13 @@ private fun GameDetailContent(
                 apiKey.isBlank() -> {
                     item {
                         Text(
-                            text = "Add RAWG_API_KEY to local.properties " +
-                                "to load cover art, release information, " +
-                                "platforms, genres, ratings and description.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text =
+                                "Add RAWG_API_KEY to local.properties " +
+                                    "to load cover art, release " +
+                                    "information, platforms, genres, " +
+                                    "ratings and description.",
+                            color =
+                                MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -469,59 +595,78 @@ private fun GameDetailContent(
                     val details = rawgDetails!!
 
                     details.released
-                        ?.takeIf { released -> released.isNotBlank() }
+                        ?.takeIf { released ->
+                            released.isNotBlank()
+                        }
                         ?.let { released ->
                             item {
                                 GameDetailRow(
                                     label = "Release date",
-                                    value = formatGameReleaseDate(released)
+                                    value =
+                                        formatGameReleaseDate(released)
                                 )
                             }
                         }
 
-                    joinedNames(details.platforms.map { entry ->
-                        entry.platform.name
-                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
-                        item {
-                            GameDetailRow(
-                                label = "Platforms",
-                                value = value
-                            )
+                    joinedNames(
+                        details.platforms.map { entry ->
+                            entry.platform.name
                         }
-                    }
+                    )
+                        .takeIf { value -> value.isNotBlank() }
+                        ?.let { value ->
+                            item {
+                                GameDetailRow(
+                                    label = "Platforms",
+                                    value = value
+                                )
+                            }
+                        }
 
-                    joinedNames(details.genres.map { genre ->
-                        genre.name
-                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
-                        item {
-                            GameDetailRow(
-                                label = "Genres",
-                                value = value
-                            )
+                    joinedNames(
+                        details.genres.map { genre ->
+                            genre.name
                         }
-                    }
+                    )
+                        .takeIf { value -> value.isNotBlank() }
+                        ?.let { value ->
+                            item {
+                                GameDetailRow(
+                                    label = "Genres",
+                                    value = value
+                                )
+                            }
+                        }
 
-                    joinedNames(details.developers.map { developer ->
-                        developer.name
-                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
-                        item {
-                            GameDetailRow(
-                                label = "Developer",
-                                value = value
-                            )
+                    joinedNames(
+                        details.developers.map { developer ->
+                            developer.name
                         }
-                    }
+                    )
+                        .takeIf { value -> value.isNotBlank() }
+                        ?.let { value ->
+                            item {
+                                GameDetailRow(
+                                    label = "Developer",
+                                    value = value
+                                )
+                            }
+                        }
 
-                    joinedNames(details.publishers.map { publisher ->
-                        publisher.name
-                    }).takeIf { value -> value.isNotBlank() }?.let { value ->
-                        item {
-                            GameDetailRow(
-                                label = "Publisher",
-                                value = value
-                            )
+                    joinedNames(
+                        details.publishers.map { publisher ->
+                            publisher.name
                         }
-                    }
+                    )
+                        .takeIf { value -> value.isNotBlank() }
+                        ?.let { value ->
+                            item {
+                                GameDetailRow(
+                                    label = "Publisher",
+                                    value = value
+                                )
+                            }
+                        }
 
                     details.ageRating
                         ?.name
@@ -568,10 +713,13 @@ private fun GameDetailContent(
 
                     if (details.description.isNotBlank()) {
                         item {
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(
+                                modifier = Modifier.height(4.dp)
+                            )
                             Text(
                                 text = details.description,
-                                style = MaterialTheme.typography.bodyLarge
+                                style =
+                                    MaterialTheme.typography.bodyLarge
                             )
                         }
                     }
@@ -579,7 +727,9 @@ private fun GameDetailContent(
                     item {
                         TextButton(
                             onClick = {
-                                uriHandler.openUri("https://rawg.io")
+                                uriHandler.openUri(
+                                    "https://rawg.io"
+                                )
                             }
                         ) {
                             Text("Game data provided by RAWG")
@@ -600,7 +750,10 @@ private fun GameHero(
         modifier = Modifier
             .fillMaxWidth()
             .height(230.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+            .clip(RoundedCornerShape(12.dp))
+            .background(
+                MaterialTheme.colorScheme.surfaceVariant
+            ),
         contentAlignment = Alignment.Center
     ) {
         if (imageUrl.isNullOrBlank()) {
@@ -608,11 +761,14 @@ private fun GameHero(
                 text = title,
                 modifier = Modifier.padding(24.dp),
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center
             )
         } else {
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(
+                    LocalContext.current
+                )
                     .data(imageUrl)
                     .crossfade(true)
                     .build(),
@@ -684,7 +840,8 @@ private fun AddGameDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement =
+                    Arrangement.spacedBy(14.dp)
             ) {
                 OutlinedTextField(
                     value = name,
@@ -708,14 +865,19 @@ private fun AddGameDialog(
                     },
                     supportingText = {
                         Text(
-                            if (hoursText.isNotBlank() && parsedHours == null) {
+                            if (
+                                hoursText.isNotBlank() &&
+                                parsedHours == null
+                            ) {
                                 "Use the format 00:00h."
                             } else {
                                 "Hours and minutes"
                             }
                         )
                     },
-                    isError = hoursText.isNotBlank() && parsedHours == null,
+                    isError =
+                        hoursText.isNotBlank() &&
+                            parsedHours == null,
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Ascii,
@@ -730,7 +892,8 @@ private fun AddGameDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement =
+                        Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
                         selected = playerCount == 1,
@@ -764,7 +927,8 @@ private fun AddGameDialog(
                     ) {
                         Text(
                             text = "Finished",
-                            style = MaterialTheme.typography.labelLarge
+                            style =
+                                MaterialTheme.typography.labelLarge
                         )
                         Text(
                             text = if (isFinished) {
@@ -772,8 +936,11 @@ private fun AddGameDialog(
                             } else {
                                 "Not completed"
                             },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            style =
+                                MaterialTheme.typography.bodySmall,
+                            color =
+                                MaterialTheme.colorScheme
+                                    .onSurfaceVariant
                         )
                     }
 
@@ -846,9 +1013,12 @@ private fun FinishedTick(
 }
 
 private fun parseHours(value: String): Int? {
-    val match = HoursPattern.matchEntire(value) ?: return null
-    val hours = match.groupValues[1].toIntOrNull() ?: return null
-    val minutes = match.groupValues[2].toIntOrNull() ?: return null
+    val match = HoursPattern.matchEntire(value)
+        ?: return null
+    val hours = match.groupValues[1].toIntOrNull()
+        ?: return null
+    val minutes = match.groupValues[2].toIntOrNull()
+        ?: return null
 
     return hours * 60 + minutes
 }
@@ -876,5 +1046,6 @@ private fun joinedNames(values: List<String>): String =
 
 private fun formatGameReleaseDate(value: String): String =
     runCatching {
-        LocalDate.parse(value).format(GameReleaseDateFormatter)
+        LocalDate.parse(value)
+            .format(GameReleaseDateFormatter)
     }.getOrDefault(value)
