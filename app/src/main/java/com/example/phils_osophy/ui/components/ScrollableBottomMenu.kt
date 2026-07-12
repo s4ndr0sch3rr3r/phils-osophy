@@ -33,10 +33,10 @@ private val menuItems = BottomCategory.values().toList()
 enum class BottomCategory(val label: String) {
     Movies("Movies"),
     Series("Series"),
-    Explore("Explore"),
-    Profile("Profile"),
     Games("Games"),
-    Books("Books")
+    Books("Books"),
+    Explore("Explore"),
+    Profile("Profile")
 }
 
 @Composable

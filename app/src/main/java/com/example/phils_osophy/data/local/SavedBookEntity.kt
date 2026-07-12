@@ -18,7 +18,10 @@ data class SavedBookEntity(
     val addedAtEpochMillis: Long,
     val status: String,
     @ColumnInfo(defaultValue = "0")
-    val isFavorite: Boolean
+    val isFavorite: Boolean,
+    @ColumnInfo(defaultValue = "0")
+    val readingProgressPercent: Int,
+    val finishedAtEpochMillis: Long?
 )
 
 enum class BookStatus {
@@ -39,14 +42,24 @@ fun BookDto.toSavedBookEntity(
     status: BookStatus,
     addedAtEpochMillis: Long = System.currentTimeMillis(),
     isFavorite: Boolean = false
-): SavedBookEntity = SavedBookEntity(
-    key = key,
-    title = title,
-    authors = authorNames.joinToString(", "),
-    firstPublishYear = firstPublishYear,
-    coverId = coverId,
-    editionCount = editionCount,
-    addedAtEpochMillis = addedAtEpochMillis,
-    status = status.name,
-    isFavorite = isFavorite
-)
+): SavedBookEntity {
+    val isFinished = status == BookStatus.FINISHED
+
+    return SavedBookEntity(
+        key = key,
+        title = title,
+        authors = authorNames.joinToString(", "),
+        firstPublishYear = firstPublishYear,
+        coverId = coverId,
+        editionCount = editionCount,
+        addedAtEpochMillis = addedAtEpochMillis,
+        status = status.name,
+        isFavorite = isFavorite,
+        readingProgressPercent = if (isFinished) 100 else 0,
+        finishedAtEpochMillis = if (isFinished) {
+            System.currentTimeMillis()
+        } else {
+            null
+        }
+    )
+}
