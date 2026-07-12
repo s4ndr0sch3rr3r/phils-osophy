@@ -1,0 +1,106 @@
+name: Apply three-column media layout
+
+on:
+  push:
+    branches:
+      - agent/three-column-expanded-media
+
+permissions:
+  contents: write
+
+jobs:
+  apply-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/three-column-expanded-media
+
+      - name: Tighten media card layout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              Path("app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt"): [
+                  (
+                      "        horizontalArrangement = Arrangement.spacedBy(4.dp),\n"
+                      "        verticalArrangement = Arrangement.spacedBy(4.dp)",
+                      "        horizontalArrangement = Arrangement.spacedBy(2.dp),\n"
+                      "        verticalArrangement = Arrangement.spacedBy(2.dp)",
+                  ),
+              ],
+              Path("app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt"): [
+                  (
+                      "                verticalArrangement = Arrangement.spacedBy(12.dp)\n"
+                      "            ) {\n"
+                      "                series.chunked(2).forEach { rowSeries ->\n"
+                      "                    Row(\n"
+                      "                        modifier = Modifier.fillMaxWidth(),\n"
+                      "                        horizontalArrangement = Arrangement.spacedBy(12.dp),",
+                      "                verticalArrangement = Arrangement.spacedBy(6.dp)\n"
+                      "            ) {\n"
+                      "                series.chunked(3).forEach { rowSeries ->\n"
+                      "                    Row(\n"
+                      "                        modifier = Modifier.fillMaxWidth(),\n"
+                      "                        horizontalArrangement = Arrangement.spacedBy(6.dp),",
+                  ),
+                  (
+                      "                horizontalArrangement = Arrangement.spacedBy(12.dp),\n"
+                      "                contentPadding = PaddingValues(end = 8.dp)",
+                      "                horizontalArrangement = Arrangement.spacedBy(6.dp),\n"
+                      "                contentPadding = PaddingValues(end = 4.dp)",
+                  ),
+                  (
+                      "            .width(120.dp)\n"
+                      "            .clickable(onClick = onClick)",
+                      "            .width(104.dp)\n"
+                      "            .clickable(onClick = onClick)",
+                  ),
+                  (
+                      "                    .size(width = 120.dp, height = 180.dp)",
+                      "                    .size(width = 104.dp, height = 156.dp)",
+                  ),
+              ],
+              Path("app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt"): [
+                  (
+                      "                        horizontalArrangement = Arrangement.spacedBy(12.dp),\n"
+                      "                        contentPadding = PaddingValues(end = 8.dp)",
+                      "                        horizontalArrangement = Arrangement.spacedBy(6.dp),\n"
+                      "                        contentPadding = PaddingValues(end = 4.dp)",
+                  ),
+                  (
+                      "    Column(modifier = Modifier.width(116.dp)) {",
+                      "    Column(modifier = Modifier.width(104.dp)) {",
+                  ),
+                  (
+                      "                .size(width = 116.dp, height = 174.dp)",
+                      "                .size(width = 104.dp, height = 156.dp)",
+                  ),
+              ],
+          }
+
+          for path, changes in replacements.items():
+              text = path.read_text(encoding="utf-8")
+              for old, new in changes:
+                  if text.count(old) != 1:
+                      raise SystemExit(
+                          f"Expected exactly one match in {path} for:\n{old}"
+                      )
+                  text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Commit layout change
+        run: |
+          rm .github/workflows/apply-three-column-media-layout.yml
+          rm .github/trigger-three-column-media-layout
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt \
+                  .github/workflows/apply-three-column-media-layout.yml \
+                  .github/trigger-three-column-media-layout
+          git commit -m "Fit three media cards per row"
+          git push origin HEAD:agent/three-column-expanded-media
