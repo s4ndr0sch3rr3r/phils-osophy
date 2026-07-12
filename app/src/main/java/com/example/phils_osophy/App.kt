@@ -9,6 +9,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
+import com.example.phils_osophy.data.local.SavedGameEntity
 import com.example.phils_osophy.data.local.WatchedEpisodeEntity
 import com.example.phils_osophy.data.local.WatchedEpisodeKey
 import com.example.phils_osophy.data.local.toSavedMovieEntity
@@ -20,6 +21,7 @@ import com.example.phils_osophy.ui.screens.AddMovieDialog
 import com.example.phils_osophy.ui.screens.BooksMenuScreen
 import com.example.phils_osophy.ui.screens.EmptyPageScreen
 import com.example.phils_osophy.ui.screens.EpisodeDetailScreen
+import com.example.phils_osophy.ui.screens.GameLibraryScreen
 import com.example.phils_osophy.ui.screens.MainMenuScreen
 import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
@@ -63,11 +65,21 @@ fun App() {
     val watchedEpisodeDao = remember(database) {
         database.watchedEpisodeDao()
     }
+    val savedGameDao = remember(database) {
+        database.savedGameDao()
+    }
 
     val savedMoviesFlow = remember(savedMovieDao) {
         savedMovieDao.observeAll()
     }
     val savedMovieEntities by savedMoviesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val savedGamesFlow = remember(savedGameDao) {
+        savedGameDao.observeAll()
+    }
+    val savedGames by savedGamesFlow.collectAsState(
         initial = emptyList()
     )
 
@@ -441,8 +453,24 @@ fun App() {
             }
 
             AppScreen.GamesMenu -> {
-                EmptyPageScreen(
-                    title = "Games",
+                GameLibraryScreen(
+                    games = savedGames,
+                    onAddGame = {
+                            name,
+                            hoursPlayedMinutes,
+                            playerCount,
+                            isFinished ->
+                        coroutineScope.launch {
+                            savedGameDao.insert(
+                                SavedGameEntity(
+                                    name = name,
+                                    hoursPlayedMinutes = hoursPlayedMinutes,
+                                    playerCount = playerCount,
+                                    isFinished = isFinished
+                                )
+                            )
+                        }
+                    },
                     onBackClick = ::goBackToMainMenu
                 )
             }
