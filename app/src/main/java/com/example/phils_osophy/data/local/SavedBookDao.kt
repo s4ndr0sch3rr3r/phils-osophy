@@ -42,12 +42,16 @@ interface SavedBookDao {
 
     @Query(
         "UPDATE saved_books " +
-            "SET status = :status " +
+            "SET status = :status, " +
+            "readingProgressPercent = :readingProgressPercent, " +
+            "finishedAtEpochMillis = :finishedAtEpochMillis " +
             "WHERE `key` = :bookKey"
     )
-    suspend fun updateStatus(
+    suspend fun updateReadingState(
         bookKey: String,
-        status: String
+        status: String,
+        readingProgressPercent: Int,
+        finishedAtEpochMillis: Long?
     )
 
     @Query(
