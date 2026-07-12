@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,16 +48,17 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.phils_osophy.data.local.SavedSeriesEntity
+import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.local.WatchedEpisodeKey
 import com.example.phils_osophy.data.remote.EpisodeDto
 import com.example.phils_osophy.data.remote.SeasonDetailsDto
 import com.example.phils_osophy.data.remote.SeasonSummaryDto
 import com.example.phils_osophy.data.remote.SeriesDetailsDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import kotlinx.coroutines.launch
 
 private const val TMDB_SERIES_BACKDROP_BASE_URL =
     "https://image.tmdb.org/t/p/w780"
-
 private const val TMDB_EPISODE_STILL_BASE_URL =
     "https://image.tmdb.org/t/p/w500"
 
@@ -100,6 +102,11 @@ fun SeriesDetailScreen(
     val seasonCache = remember(series.id) {
         mutableStateMapOf<Int, SeasonDetailsDto>()
     }
+    val applicationContext = LocalContext.current.applicationContext
+    val completionTracker = remember(applicationContext) {
+        SeriesCompletionTracker(applicationContext)
+    }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(series.id) {
         isLoading = true
@@ -123,8 +130,8 @@ fun SeriesDetailScreen(
     }
 
     LaunchedEffect(expandedSeasonNumber) {
-        val seasonNumber =
-            expandedSeasonNumber ?: return@LaunchedEffect
+        val seasonNumber = expandedSeasonNumber
+            ?: return@LaunchedEffect
 
         if (seasonCache[seasonNumber] == null) {
             loadingSeasonNumber = seasonNumber
@@ -136,7 +143,7 @@ fun SeriesDetailScreen(
                         seasonNumber = seasonNumber
                     )
             } catch (_: Exception) {
-                // The season can be collapsed and opened again to retry.
+                // Collapse and reopen the season to retry.
             } finally {
                 loadingSeasonNumber = null
             }
@@ -145,9 +152,7 @@ fun SeriesDetailScreen(
 
     val title = details
         ?.name
-        ?.takeIf { name ->
-            name.isNotBlank()
-        }
+        ?.takeIf { name -> name.isNotBlank() }
         ?: series.name
     val imagePath = details?.backdropPath
         ?: details?.posterPath
@@ -166,9 +171,7 @@ fun SeriesDetailScreen(
         ) {
             if (imageUrl != null) {
                 AsyncImage(
-                    model = ImageRequest.Builder(
-                        LocalContext.current
-                    )
+                    model = ImageRequest.Builder(LocalContext.current)
                         .data(imageUrl)
                         .crossfade(true)
                         .build(),
@@ -181,8 +184,7 @@ fun SeriesDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            MaterialTheme.colorScheme
-                                .surfaceVariant
+                            MaterialTheme.colorScheme.surfaceVariant
                         )
                 )
             }
@@ -223,11 +225,7 @@ fun SeriesDetailScreen(
                     .padding(end = 8.dp, top = 8.dp)
             ) {
                 Text(
-                    text = if (series.isFavorite) {
-                        "♥"
-                    } else {
-                        "♡"
-                    },
+                    text = if (series.isFavorite) "♥" else "♡",
                     color = if (series.isFavorite) {
                         Color(0xFFE53935)
                     } else {
@@ -245,8 +243,7 @@ fun SeriesDetailScreen(
                 Text(
                     text = title,
                     color = Color.White,
-                    style =
-                        MaterialTheme.typography.headlineMedium,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
 
@@ -260,27 +257,16 @@ fun SeriesDetailScreen(
             }
         }
 
-        TabRow(
-            selectedTabIndex = selectedTab
-        ) {
+        TabRow(selectedTabIndex = selectedTab) {
             Tab(
                 selected = selectedTab == 0,
-                onClick = {
-                    selectedTab = 0
-                },
-                text = {
-                    Text("Info")
-                }
+                onClick = { selectedTab = 0 },
+                text = { Text("Info") }
             )
-
             Tab(
                 selected = selectedTab == 1,
-                onClick = {
-                    selectedTab = 1
-                },
-                text = {
-                    Text("Episodes")
-                }
+                onClick = { selectedTab = 1 },
+                text = { Text("Episodes") }
             )
         }
 
@@ -310,25 +296,45 @@ fun SeriesDetailScreen(
                         .filter { season ->
                             season.seasonNumber > 0
                         },
-                    expandedSeasonNumber =
-                        expandedSeasonNumber,
-                    loadingSeasonNumber =
-                        loadingSeasonNumber,
+                    expandedSeasonNumber = expandedSeasonNumber,
+                    loadingSeasonNumber = loadingSeasonNumber,
                     seasonCache = seasonCache,
                     watchedEpisodes = watchedEpisodes,
                     onSeasonClick = { seasonNumber ->
                         expandedSeasonNumber =
-                            if (
-                                expandedSeasonNumber ==
-                                seasonNumber
-                            ) {
+                            if (expandedSeasonNumber == seasonNumber) {
                                 null
                             } else {
                                 seasonNumber
                             }
                     },
+                    onSeasonWatchedClick = { seasonNumber, episodeCount ->
+                        coroutineScope.launch {
+                            completionTracker.markSeasonWatched(
+                                seriesId = series.id,
+                                seasonNumber = seasonNumber,
+                                episodeCount = episodeCount
+                            )
+                        }
+                    },
                     onEpisodeClick = onEpisodeClick,
-                    onWatchedChange = onWatchedChange
+                    onWatchedChange = { seasonNumber, episodeNumber, watched ->
+                        // Preserve the existing callback while centralizing the
+                        // progress/status transaction in the tracker.
+                        onWatchedChange(
+                            seasonNumber,
+                            episodeNumber,
+                            watched
+                        )
+                        coroutineScope.launch {
+                            completionTracker.setEpisodeWatched(
+                                seriesId = series.id,
+                                seasonNumber = seasonNumber,
+                                episodeNumber = episodeNumber,
+                                watched = watched
+                            )
+                        }
+                    }
                 )
             }
         }
@@ -344,14 +350,12 @@ private fun SeriesInfoTab(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(24.dp),
-        verticalArrangement =
-            Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
             Text(
                 text = "Series information",
-                style =
-                    MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -361,8 +365,7 @@ private fun SeriesInfoTab(
                 Text(
                     text = errorMessage,
                     color = MaterialTheme.colorScheme.error,
-                    style =
-                        MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall
                 )
             }
         }
@@ -371,9 +374,7 @@ private fun SeriesInfoTab(
             Text(
                 text = details
                     ?.overview
-                    ?.takeIf { overview ->
-                        overview.isNotBlank()
-                    }
+                    ?.takeIf { overview -> overview.isNotBlank() }
                     ?: series.overview.ifBlank {
                         "No series information available."
                     },
@@ -390,12 +391,8 @@ private fun SeriesInfoTab(
                 label = "First aired",
                 value = details
                     ?.firstAirDate
-                    ?.takeIf { date ->
-                        date.isNotBlank()
-                    }
-                    ?: series.firstAirDate.ifBlank {
-                        "Unknown"
-                    }
+                    ?.takeIf { date -> date.isNotBlank() }
+                    ?: series.firstAirDate.ifBlank { "Unknown" }
             )
         }
 
@@ -404,9 +401,7 @@ private fun SeriesInfoTab(
                 label = "Status",
                 value = details
                     ?.status
-                    ?.takeIf { status ->
-                        status.isNotBlank()
-                    }
+                    ?.takeIf { status -> status.isNotBlank() }
                     ?: "Unknown"
             )
         }
@@ -422,12 +417,9 @@ private fun DetailValue(
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge,
-            color =
-                MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
         Spacer(modifier = Modifier.height(4.dp))
-
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium
@@ -443,6 +435,10 @@ private fun EpisodesTab(
     seasonCache: Map<Int, SeasonDetailsDto>,
     watchedEpisodes: Set<WatchedEpisodeKey>,
     onSeasonClick: (Int) -> Unit,
+    onSeasonWatchedClick: (
+        seasonNumber: Int,
+        episodeCount: Int
+    ) -> Unit,
     onEpisodeClick: (
         seasonNumber: Int,
         episodeNumber: Int
@@ -466,22 +462,16 @@ private fun EpisodesTab(
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement =
-            Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(
             items = seasons,
-            key = { season ->
-                season.seasonNumber
-            }
+            key = { season -> season.seasonNumber }
         ) { season ->
             val isExpanded =
-                expandedSeasonNumber ==
-                    season.seasonNumber
-            val watchedCount = watchedEpisodes.count {
-                    watched ->
-                watched.seasonNumber ==
-                    season.seasonNumber
+                expandedSeasonNumber == season.seasonNumber
+            val watchedCount = watchedEpisodes.count { watched ->
+                watched.seasonNumber == season.seasonNumber
             }
             val isSeasonWatched =
                 season.episodeCount > 0 &&
@@ -493,56 +483,47 @@ private fun EpisodesTab(
                 isExpanded = isExpanded,
                 isSeasonWatched = isSeasonWatched,
                 onClick = {
-                    onSeasonClick(
-                        season.seasonNumber
+                    onSeasonClick(season.seasonNumber)
+                },
+                onWatchedClick = {
+                    onSeasonWatchedClick(
+                        season.seasonNumber,
+                        season.episodeCount
                     )
                 }
             )
 
             if (isExpanded) {
                 when {
-                    loadingSeasonNumber ==
-                        season.seasonNumber -> {
+                    loadingSeasonNumber == season.seasonNumber -> {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(96.dp),
-                            contentAlignment =
-                                Alignment.Center
+                            contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator()
                         }
                     }
 
-                    seasonCache[
-                        season.seasonNumber
-                    ] == null -> {
+                    seasonCache[season.seasonNumber] == null -> {
                         Text(
-                            text =
-                                "Tap the season again to retry loading.",
-                            color =
-                                MaterialTheme.colorScheme.error,
-                            style =
-                                MaterialTheme.typography.bodySmall
+                            text = "Tap the season again to retry loading.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
                         )
                     }
 
                     else -> {
-                        seasonCache[
-                            season.seasonNumber
-                        ]
+                        seasonCache[season.seasonNumber]
                             ?.episodes
                             .orEmpty()
                             .forEach { episode ->
-                                val key =
-                                    WatchedEpisodeKey(
-                                        seasonNumber =
-                                            episode.seasonNumber,
-                                        episodeNumber =
-                                            episode.episodeNumber
-                                    )
-                                val isWatched =
-                                    key in watchedEpisodes
+                                val key = WatchedEpisodeKey(
+                                    seasonNumber = episode.seasonNumber,
+                                    episodeNumber = episode.episodeNumber
+                                )
+                                val isWatched = key in watchedEpisodes
 
                                 EpisodeRow(
                                     episode = episode,
@@ -562,10 +543,7 @@ private fun EpisodesTab(
                                     }
                                 )
 
-                                Spacer(
-                                    modifier =
-                                        Modifier.height(8.dp)
-                                )
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                     }
                 }
@@ -580,15 +558,17 @@ private fun SeasonHeader(
     watchedCount: Int,
     isExpanded: Boolean,
     isSeasonWatched: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onWatchedClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
@@ -598,18 +578,13 @@ private fun SeasonHeader(
                     text = season.name.ifBlank {
                         "Season ${season.seasonNumber}"
                     },
-                    style =
-                        MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-
                 Spacer(modifier = Modifier.height(4.dp))
-
                 Text(
-                    text =
-                        "$watchedCount/${season.episodeCount} watched",
-                    style =
-                        MaterialTheme.typography.bodyMedium
+                    text = "$watchedCount/${season.episodeCount} watched",
+                    style = MaterialTheme.typography.bodyMedium
                 )
             }
 
@@ -623,6 +598,10 @@ private fun SeasonHeader(
                             UnwatchedGrey
                         },
                         shape = CircleShape
+                    )
+                    .clickable(
+                        enabled = !isSeasonWatched,
+                        onClick = onWatchedClick
                     ),
                 contentAlignment = Alignment.Center
             ) {
@@ -641,13 +620,8 @@ private fun SeasonHeader(
             Spacer(modifier = Modifier.width(12.dp))
 
             Text(
-                text = if (isExpanded) {
-                    "⌃"
-                } else {
-                    "⌄"
-                },
-                style =
-                    MaterialTheme.typography.headlineSmall
+                text = if (isExpanded) "⌃" else "⌄",
+                style = MaterialTheme.typography.headlineSmall
             )
         }
     }
@@ -685,9 +659,7 @@ private fun EpisodeRow(
             ) {
                 if (imageUrl != null) {
                     AsyncImage(
-                        model = ImageRequest.Builder(
-                            LocalContext.current
-                        )
+                        model = ImageRequest.Builder(LocalContext.current)
                             .data(imageUrl)
                             .crossfade(true)
                             .build(),
@@ -715,19 +687,15 @@ private fun EpisodeRow(
                         episode.seasonNumber,
                         episode.episodeNumber
                     ),
-                    style =
-                        MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
-
                 Spacer(modifier = Modifier.height(6.dp))
-
                 Text(
                     text = episode.name.ifBlank {
                         "Episode ${episode.episodeNumber}"
                     },
-                    style =
-                        MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -745,9 +713,7 @@ private fun EpisodeRow(
                         },
                         shape = CircleShape
                     )
-                    .clickable(
-                        onClick = onWatchedClick
-                    ),
+                    .clickable(onClick = onWatchedClick),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -765,9 +731,7 @@ private fun EpisodeRow(
     }
 }
 
-private fun seriesSubtitle(
-    details: SeriesDetailsDto?
-): String {
+private fun seriesSubtitle(details: SeriesDetailsDto?): String {
     if (details == null) {
         return "Series information"
     }
@@ -777,12 +741,8 @@ private fun seriesSubtitle(
         else -> "${details.numberOfSeasons} seasons"
     }
     val genres = details.genres
-        .map { genre ->
-            genre.name
-        }
-        .filter { name ->
-            name.isNotBlank()
-        }
+        .map { genre -> genre.name }
+        .filter { name -> name.isNotBlank() }
         .joinToString(", ")
 
     return if (genres.isBlank()) {

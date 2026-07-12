@@ -16,6 +16,13 @@ interface WatchedEpisodeDao {
     )
     fun observeForSeries(seriesId: Int): Flow<List<WatchedEpisodeEntity>>
 
+    @Query(
+        "SELECT * FROM watched_episodes " +
+            "WHERE seriesId = :seriesId " +
+            "ORDER BY seasonNumber, episodeNumber"
+    )
+    suspend fun getForSeries(seriesId: Int): List<WatchedEpisodeEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun markWatched(episode: WatchedEpisodeEntity)
 
