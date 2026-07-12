@@ -56,6 +56,9 @@ import kotlinx.coroutines.withContext
 
 private val ProfileGreen = Color(0xFF64DD75)
 private const val FallbackEpisodeRuntimeMinutes = 45
+private const val MinutesPerHour = 60L
+private const val MinutesPerDay = 24L * MinutesPerHour
+private const val MinutesPerMonth = 30L * MinutesPerDay
 private val StatisticsDateFormatter = DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm")
 
 @Composable
@@ -559,12 +562,28 @@ private fun statisticsSummaryDetail(statistics: ProfileTimeStats): String {
 
 private fun formatDuration(totalMinutes: Long): String {
     val safeMinutes = totalMinutes.coerceAtLeast(0)
-    val hours = safeMinutes / 60
-    val minutes = safeMinutes % 60
+    val months = safeMinutes / MinutesPerMonth
+    val minutesAfterMonths = safeMinutes % MinutesPerMonth
+    val days = minutesAfterMonths / MinutesPerDay
+    val minutesAfterDays = minutesAfterMonths % MinutesPerDay
+    val hours = minutesAfterDays / MinutesPerHour
+    val minutes = minutesAfterDays % MinutesPerHour
 
     return when {
-        hours == 0L -> "$minutes min"
-        minutes == 0L -> "$hours h"
-        else -> "$hours h $minutes min"
+        months > 0L -> formatDurationPair(months, "mo", days, "d")
+        days > 0L -> formatDurationPair(days, "d", hours, "h")
+        hours > 0L -> formatDurationPair(hours, "h", minutes, "min")
+        else -> "$minutes min"
     }
+}
+
+private fun formatDurationPair(
+    primaryValue: Long,
+    primaryUnit: String,
+    secondaryValue: Long,
+    secondaryUnit: String
+): String = if (secondaryValue > 0L) {
+    "$primaryValue $primaryUnit $secondaryValue $secondaryUnit"
+} else {
+    "$primaryValue $primaryUnit"
 }
