@@ -74,37 +74,55 @@ fun MovieListScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (movies.isEmpty()) {
-            Text(
-                text = "No movies added yet.",
-                modifier = Modifier.padding(horizontal = 8.dp)
-            )
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(
-                    items = movies,
-                    key = { movie -> movie.id }
-                ) { movie ->
-                    MoviePosterTile(
-                        movie = movie,
-                        onClick = {
-                            onMovieClick(movie.id)
-                        },
-                        onFavoriteClick = {
-                            onFavoriteClick(
-                                movie.id,
-                                !movie.isFavorite
-                            )
-                        }
+        SavedMovieGrid(
+            movies = movies,
+            onMovieClick = onMovieClick,
+            onFavoriteClick = onFavoriteClick,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@Composable
+fun SavedMovieGrid(
+    movies: List<SavedMovieEntity>,
+    onMovieClick: (Int) -> Unit,
+    onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (movies.isEmpty()) {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
+        ) {
+            Text("No movies added yet.")
+        }
+        return
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        modifier = modifier,
+        contentPadding = PaddingValues(bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        items(
+            items = movies,
+            key = { movie -> movie.id }
+        ) { movie ->
+            MoviePosterTile(
+                movie = movie,
+                onClick = {
+                    onMovieClick(movie.id)
+                },
+                onFavoriteClick = {
+                    onFavoriteClick(
+                        movie.id,
+                        !movie.isFavorite
                     )
                 }
-            }
+            )
         }
     }
 }
