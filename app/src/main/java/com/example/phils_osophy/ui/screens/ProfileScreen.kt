@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,7 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.phils_osophy.data.importer.TvTimeBackupImporter
+import com.example.phils_osophy.data.importer.TvTimeGdprImporter
 import com.example.phils_osophy.data.local.BookStatus
 import com.example.phils_osophy.data.local.SavedBookEntity
 import com.example.phils_osophy.data.local.SavedGameEntity
@@ -84,7 +85,7 @@ fun ProfileScreen(
             importFailed = false
 
             try {
-                val result = TvTimeBackupImporter.importBackup(
+                val result = TvTimeGdprImporter.importBackup(
                     context = context,
                     uri = uri
                 )
@@ -142,73 +143,6 @@ fun ProfileScreen(
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp)
-                ) {
-                    Text(
-                        text = "TV Time backup",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "Select the complete TV Time GDPR ZIP. " +
-                            "The importer matches shows and movies with TMDB " +
-                            "and restores watched episodes.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Button(
-                        onClick = {
-                            backupPicker.launch(
-                                arrayOf(
-                                    "application/zip",
-                                    "application/json",
-                                    "text/csv",
-                                    "text/plain",
-                                    "application/octet-stream"
-                                )
-                            )
-                        },
-                        enabled = !isImporting
-                    ) {
-                        if (isImporting) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.size(8.dp))
-                            Text("Importing…")
-                        } else {
-                            Text("Load TV Time backup")
-                        }
-                    }
-
-                    importMessage?.let { message ->
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = message,
-                            color = if (importFailed) {
-                                MaterialTheme.colorScheme.error
-                            } else {
-                                ProfileGreen
-                            },
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
             }
         }
 
@@ -289,6 +223,109 @@ fun ProfileScreen(
                             "Reading duration is not stored, so it is excluded from the total."
                     )
                 }
+            }
+        }
+
+        item {
+            TvTimeBackupCard(
+                isImporting = isImporting,
+                importMessage = importMessage,
+                importFailed = importFailed,
+                onChooseFile = {
+                    backupPicker.launch(
+                        arrayOf(
+                            "application/zip",
+                            "application/octet-stream"
+                        )
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun TvTimeBackupCard(
+    isImporting: Boolean,
+    importMessage: String?,
+    importFailed: Boolean,
+    onChooseFile: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Text(
+                text = "Import TV Time history",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Choose the file normally downloaded from WhatsApp " +
+                    "or TV Time. Only watched movies and series are imported.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            OutlinedTextField(
+                value = "gdpr-data.zip",
+                onValueChange = {},
+                modifier = Modifier.fillMaxWidth(),
+                readOnly = true,
+                singleLine = true,
+                label = {
+                    Text("Backup filename")
+                },
+                supportingText = {
+                    Text("Usually located in Downloads or WhatsApp Documents")
+                }
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Button(
+                onClick = onChooseFile,
+                enabled = !isImporting,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (isImporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.size(8.dp))
+                    Text("Importing…")
+                } else {
+                    Text("Find gdpr-data.zip with file manager")
+                }
+            }
+
+            Text(
+                text = "For every imported series, all episodes from season 1 " +
+                    "through the latest watched episode are marked watched.",
+                modifier = Modifier.padding(top = 10.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            importMessage?.let { message ->
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = message,
+                    color = if (importFailed) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        ProfileGreen
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
     }
