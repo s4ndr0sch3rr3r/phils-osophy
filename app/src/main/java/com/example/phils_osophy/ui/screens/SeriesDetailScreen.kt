@@ -223,7 +223,15 @@ fun SeriesDetailScreen(
                     details = details,
                     completedAtEpochMillis = seriesCompletedAtEpochMillis,
                     errorMessage = errorMessage,
-                    onChangeRatingClick = { isRatingDialogVisible = true }
+                    onChangeRatingClick = { isRatingDialogVisible = true },
+                    onSaveComment = { comment ->
+                        coroutineScope.launch {
+                            database.savedSeriesDao().updateNote(
+                                seriesId = series.id,
+                                note = comment
+                            )
+                        }
+                    }
                 )
             }
 
@@ -385,7 +393,8 @@ private fun SeriesInfoTab(
     details: SeriesDetailsDto?,
     completedAtEpochMillis: Long?,
     errorMessage: String?,
-    onChangeRatingClick: () -> Unit
+    onChangeRatingClick: () -> Unit,
+    onSaveComment: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -508,6 +517,17 @@ private fun SeriesInfoTab(
                     ?.status
                     ?.takeIf { status -> status.isNotBlank() }
                     ?: "Unknown"
+            )
+        }
+
+        item { HorizontalDivider() }
+
+        item {
+            EditableMediaCommentSection(
+                mediaKey = series.id,
+                savedComment = series.note,
+                onSave = onSaveComment,
+                contentPadding = 0.dp
             )
         }
     }

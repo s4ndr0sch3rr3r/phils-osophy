@@ -75,6 +75,16 @@ interface SavedBookDao {
     )
     suspend fun updateRating(bookKey: String, userRating: Int)
 
+    @Query(
+        "UPDATE saved_books " +
+            "SET note = :note " +
+            "WHERE `key` = :bookKey"
+    )
+    suspend fun updateNote(
+        bookKey: String,
+        note: String
+    )
+
     @Query("DELETE FROM saved_books WHERE `key` = :bookKey")
     suspend fun deleteByKey(bookKey: String)
 }

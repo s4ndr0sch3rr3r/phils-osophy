@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.local.SeriesStatus
@@ -100,8 +101,16 @@ fun SeriesLibraryScreen(
     var ratingSeries by remember {
         mutableStateOf<SavedSeriesEntity?>(null)
     }
+    var commentSeries by remember {
+        mutableStateOf<SavedSeriesEntity?>(null)
+    }
 
     val applicationContext = LocalContext.current.applicationContext
+    val savedSeriesDao = remember(applicationContext) {
+        PhilsOsophyDatabase
+            .getInstance(applicationContext)
+            .savedSeriesDao()
+    }
     val completionTracker = remember(applicationContext) {
         SeriesCompletionTracker(applicationContext)
     }
@@ -381,6 +390,10 @@ fun SeriesLibraryScreen(
                 ratingSeries = series
                 managedSeries = null
             },
+            onChangeComment = {
+                commentSeries = series
+                managedSeries = null
+            },
             onRemove = {
                 onRemoveSeries(series.id)
                 managedSeries = null
@@ -401,6 +414,25 @@ fun SeriesLibraryScreen(
             },
             onCancel = {
                 ratingSeries = null
+            }
+        )
+    }
+
+    commentSeries?.let { series ->
+        MediaCommentDialog(
+            mediaKey = series.id,
+            initialComment = series.note,
+            onSave = { comment ->
+                coroutineScope.launch {
+                    savedSeriesDao.updateNote(
+                        seriesId = series.id,
+                        note = comment
+                    )
+                }
+                commentSeries = null
+            },
+            onCancel = {
+                commentSeries = null
             }
         )
     }
@@ -735,6 +767,7 @@ private fun LibraryManageDialog(
     series: SavedSeriesEntity,
     onStatusChange: (SeriesStatus) -> Unit,
     onChangeRating: () -> Unit,
+    onChangeComment: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -762,6 +795,15 @@ private fun LibraryManageDialog(
                             "Change rating"
                         } else {
                             "Add rating"
+                        }
+                    )
+                }
+                TextButton(onClick = onChangeComment) {
+                    Text(
+                        if (series.note.isBlank()) {
+                            "Add comment"
+                        } else {
+                            "Edit comment"
                         }
                     )
                 }
