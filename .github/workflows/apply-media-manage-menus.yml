@@ -1,0 +1,32 @@
+name: Apply media manage menus
+
+on:
+  push:
+    branches:
+      - agent/media-card-manage-ratings
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/media-card-manage-ratings
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/add_media_manage_menus.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/example/phils_osophy/App.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/MovieSearchScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt \
+                  app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          git commit -m "Add rating and remove actions to media menus"
+          git push
