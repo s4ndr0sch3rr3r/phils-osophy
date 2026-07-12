@@ -236,6 +236,19 @@ fun App() {
                             )
                         }
                     },
+                    onChangeRating = { movieId, rating ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateRating(
+                                movieId = movieId,
+                                userRating = rating.coerceIn(0, 10)
+                            )
+                        }
+                    },
+                    onRemoveMovie = { movieId ->
+                        coroutineScope.launch {
+                            savedMovieDao.deleteById(movieId)
+                        }
+                    },
                     onBackClick = ::openMovies
                 )
             }
@@ -253,6 +266,19 @@ fun App() {
                                 movieId = movieId,
                                 isFavorite = isFavorite
                             )
+                        }
+                    },
+                    onChangeRating = { movieId, rating ->
+                        coroutineScope.launch {
+                            savedMovieDao.updateRating(
+                                movieId = movieId,
+                                userRating = rating.coerceIn(0, 10)
+                            )
+                        }
+                    },
+                    onRemoveMovie = { movieId ->
+                        coroutineScope.launch {
+                            savedMovieDao.deleteById(movieId)
                         }
                     },
                     onBackClick = ::openMovies
@@ -332,6 +358,14 @@ fun App() {
                             savedSeriesDao.updateFavorite(
                                 seriesId = seriesId,
                                 isFavorite = isFavorite
+                            )
+                        }
+                    },
+                    onChangeRating = { seriesId, rating ->
+                        coroutineScope.launch {
+                            savedSeriesDao.updateRating(
+                                seriesId = seriesId,
+                                userRating = rating.coerceIn(0, 10)
                             )
                         }
                     },

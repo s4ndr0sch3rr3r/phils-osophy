@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -53,6 +54,8 @@ fun MovieListScreen(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
+    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     Column(
@@ -77,6 +80,8 @@ fun MovieListScreen(
             movies = movies,
             onMovieClick = onMovieClick,
             onFavoriteClick = onFavoriteClick,
+            onChangeRating = onChangeRating,
+            onRemoveMovie = onRemoveMovie,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -87,6 +92,8 @@ fun SavedMovieGrid(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
+    onChangeRating: (movieId: Int, rating: Int) -> Unit,
+    onRemoveMovie: (movieId: Int) -> Unit,
     modifier: Modifier = Modifier,
     emptyMessage: String = "No movies added yet."
 ) {
@@ -121,6 +128,12 @@ fun SavedMovieGrid(
                         movie.id,
                         !movie.isFavorite
                     )
+                },
+                onChangeRating = { rating ->
+                    onChangeRating(movie.id, rating)
+                },
+                onRemoveMovie = {
+                    onRemoveMovie(movie.id)
                 }
             )
         }
@@ -131,7 +144,9 @@ fun SavedMovieGrid(
 private fun MoviePosterTile(
     movie: SavedMovieEntity,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit
+    onFavoriteClick: () -> Unit,
+    onChangeRating: (Int) -> Unit,
+    onRemoveMovie: () -> Unit
 ) {
     val posterUrl = movie.posterPath
         ?.takeIf { path -> path.isNotBlank() }
@@ -141,6 +156,12 @@ private fun MoviePosterTile(
         mutableStateOf(false)
     }
     var hasError by remember(posterUrl) {
+        mutableStateOf(false)
+    }
+    var showManageDialog by remember(movie.id) {
+        mutableStateOf(false)
+    }
+    var showRatingDialog by remember(movie.id) {
         mutableStateOf(false)
     }
 
@@ -228,6 +249,97 @@ private fun MoviePosterTile(
                     .align(Alignment.TopEnd)
                     .padding(6.dp)
             )
+
+            Text(
+                text = "•••",
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.65f))
+                    .clickable {
+                        showManageDialog = true
+                    }
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
+
+    if (showManageDialog) {
+        MovieManageDialog(
+            movie = movie,
+            onChangeRating = {
+                showManageDialog = false
+                showRatingDialog = true
+            },
+            onRemove = {
+                onRemoveMovie()
+                showManageDialog = false
+            },
+            onCancel = {
+                showManageDialog = false
+            }
+        )
+    }
+
+    if (showRatingDialog) {
+        UserRatingDialog(
+            title = "Rate ${movie.title}",
+            initialRating = movie.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                showRatingDialog = false
+            },
+            onCancel = {
+                showRatingDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun MovieManageDialog(
+    movie: SavedMovieEntity,
+    onChangeRating: () -> Unit,
+    onRemove: () -> Unit,
+    onCancel: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(movie.title) },
+        text = {
+            Column {
+                Text(
+                    text = if (movie.userRating in 1..10) {
+                        "Your rating: ${movie.userRating} / 10"
+                    } else {
+                        "Not rated"
+                    }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onChangeRating) {
+                    Text(
+                        if (movie.userRating in 1..10) {
+                            "Change rating"
+                        } else {
+                            "Add rating"
+                        }
+                    )
+                }
+                TextButton(onClick = onRemove) {
+                    Text(
+                        text = "Remove movie",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onCancel) {
+                Text("Close")
+            }
+        }
+    )
 }
