@@ -564,8 +564,8 @@ private fun BookShelf(
                     Text("No books in this category.")
                 } else {
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(end = 8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        contentPadding = PaddingValues(end = 4.dp)
                     ) {
                         items(
                             items = books,
@@ -601,10 +601,10 @@ private fun SavedBookCard(
     onFavoriteClick: () -> Unit,
     onManageClick: () -> Unit
 ) {
-    Column(modifier = Modifier.width(116.dp)) {
+    Column(modifier = Modifier.width(104.dp)) {
         Box(
             modifier = Modifier
-                .size(width = 116.dp, height = 174.dp)
+                .size(width = 104.dp, height = 156.dp)
                 .clickable(onClick = onBookClick)
         ) {
             BookCover(

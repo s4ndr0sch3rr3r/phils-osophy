@@ -435,12 +435,12 @@ private fun LibrarySection(
         if (showFullList) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                series.chunked(2).forEach { rowSeries ->
+                series.chunked(3).forEach { rowSeries ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         rowSeries.forEach { savedSeries ->
@@ -466,8 +466,8 @@ private fun LibrarySection(
         } else {
             LazyRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(end = 8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(end = 4.dp)
             ) {
                 items(
                     items = series,
@@ -513,13 +513,13 @@ private fun LibrarySeriesPoster(
 
     Card(
         modifier = Modifier
-            .width(120.dp)
+            .width(104.dp)
             .clickable(onClick = onClick)
     ) {
         Column {
             Box(
                 modifier = Modifier
-                    .size(width = 120.dp, height = 180.dp)
+                    .size(width = 104.dp, height = 156.dp)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
