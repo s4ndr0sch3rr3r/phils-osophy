@@ -24,11 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.phils_osophy.data.importer.TvTimeGdprImporter
+import com.example.phils_osophy.data.importer.TvTimeImportManager
 import com.example.phils_osophy.data.local.BookStatus
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.ProfileStatsCacheEntity
@@ -52,7 +52,6 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val ProfileGreen = Color(0xFF64DD75)
@@ -77,11 +76,7 @@ fun ProfileScreen(
     val statisticsDao = remember(database) {
         database.profileStatsCacheDao()
     }
-    val coroutineScope = rememberCoroutineScope()
-
-    var isImporting by remember { mutableStateOf(false) }
-    var importMessage by remember { mutableStateOf<String?>(null) }
-    var importFailed by remember { mutableStateOf(false) }
+    val importState by TvTimeImportManager.state.collectAsState()
 
     var statistics by remember {
         mutableStateOf(ProfileTimeStats.empty())
@@ -94,29 +89,20 @@ fun ProfileScreen(
     val backupPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri == null) {
-            return@rememberLauncherForActivityResult
+        if (uri != null) {
+            TvTimeImportManager.start(
+                context = context,
+                uri = uri
+            )
         }
+    }
 
-        coroutineScope.launch {
-            isImporting = true
-            importMessage = null
-            importFailed = false
-
-            try {
-                val result = TvTimeGdprImporter.importBackup(
-                    context = context,
-                    uri = uri
-                )
-                importMessage = result.summary()
-                statisticsRefreshToken += 1
-            } catch (exception: Exception) {
-                importFailed = true
-                importMessage = exception.localizedMessage
-                    ?: "The TV Time backup could not be imported."
-            } finally {
-                isImporting = false
-            }
+    LaunchedEffect(importState.completedAtEpochMillis) {
+        if (
+            importState.completedAtEpochMillis > 0 &&
+            !importState.failed
+        ) {
+            statisticsRefreshToken += 1
         }
     }
 
@@ -142,8 +128,6 @@ fun ProfileScreen(
             return@LaunchedEffect
         }
 
-        // Room-backed lists normally arrive immediately after composition. The small
-        // debounce avoids replacing a valid cache with the initial empty UI state.
         delay(300)
         isRefreshingStatistics = true
         statisticsRefreshMessage = null
@@ -167,8 +151,6 @@ fun ProfileScreen(
                 )
             }
 
-            // Replace the visible snapshot only after all requests and calculations
-            // completed and the complete result was persisted.
             statistics = completedSnapshot
         } catch (_: Exception) {
             statisticsRefreshMessage =
@@ -301,9 +283,9 @@ fun ProfileScreen(
 
         item {
             TvTimeBackupCard(
-                isImporting = isImporting,
-                importMessage = importMessage,
-                importFailed = importFailed,
+                isImporting = importState.isRunning,
+                importMessage = importState.message,
+                importFailed = importState.failed,
                 onChooseFile = {
                     backupPicker.launch(
                         arrayOf(
@@ -381,8 +363,8 @@ private fun TvTimeBackupCard(
             }
 
             Text(
-                text = "For every imported series, all episodes from season 1 " +
-                    "through the latest watched episode are marked watched.",
+                text = "The import keeps running when you switch screens. " +
+                    "Return to Profile to see the result and refreshed database values.",
                 modifier = Modifier.padding(top = 10.dp),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
