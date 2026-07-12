@@ -476,7 +476,14 @@ private suspend fun calculateProfileTimeStats(
 ): ProfileTimeStats = withContext(Dispatchers.IO) {
     var movieMinutes = 0L
     movies.forEach { movie ->
-        val runtime = TmdbClient.api.getMovieDetails(movie.id).runtime ?: 0
+        val runtime = try {
+            TmdbClient.api.getMovieDetails(movie.id).runtime ?: 0
+        } catch (exception: Exception) {
+            if (exception is kotlinx.coroutines.CancellationException) {
+                throw exception
+            }
+            0
+        }
         movieMinutes += runtime.coerceAtLeast(0).toLong()
     }
 
@@ -491,13 +498,20 @@ private suspend fun calculateProfileTimeStats(
             return@forEach
         }
 
-        val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
-            .episodeRunTime
-            .filter { runtime -> runtime > 0 }
-        val averageRuntime = if (runtimes.isEmpty()) {
+        val averageRuntime = try {
+            val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
+                .episodeRunTime
+                .filter { runtime -> runtime > 0 }
+            if (runtimes.isEmpty()) {
+                FallbackEpisodeRuntimeMinutes
+            } else {
+                runtimes.average().roundToInt()
+            }
+        } catch (exception: Exception) {
+            if (exception is kotlinx.coroutines.CancellationException) {
+                throw exception
+            }
             FallbackEpisodeRuntimeMinutes
-        } else {
-            runtimes.average().roundToInt()
         }
 
         seriesMinutes += watchedCount.toLong() * averageRuntime
