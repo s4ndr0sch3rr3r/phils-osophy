@@ -1,6 +1,7 @@
 package com.example.phils_osophy.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +44,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -239,6 +244,7 @@ private fun BookLibraryScreen(
     var isLoading by remember { mutableStateOf(false) }
     var hasSearched by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
+    var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember {
         mutableStateOf<String?>(null)
     }
@@ -250,6 +256,26 @@ private fun BookLibraryScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+    val searchBarScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                when {
+                    available.y < -2f -> {
+                        isSearchBarVisible = false
+                    }
+
+                    available.y > 2f -> {
+                        isSearchBarVisible = true
+                    }
+                }
+
+                return Offset.Zero
+            }
+        }
+    }
     val allSavedBooks = (
         inProgressBooks +
             finishedBooks +
@@ -303,6 +329,7 @@ private fun BookLibraryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .nestedScroll(searchBarScrollConnection)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(16.dp)
@@ -324,6 +351,7 @@ private fun BookLibraryScreen(
                 onClick = {
                     showFavoritesOnly = !showFavoritesOnly
                     query = ""
+                    isSearchBarVisible = true
                     resetSearch()
                 }
             ) {
@@ -341,44 +369,48 @@ private fun BookLibraryScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { newQuery ->
-                    query = newQuery
-                    if (newQuery.isBlank()) {
-                        resetSearch()
+        AnimatedVisibility(visible = isSearchBarVisible) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { newQuery ->
+                            query = newQuery
+                            if (newQuery.isBlank()) {
+                                resetSearch()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = {
+                            Text("Search for a book")
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                searchBooks()
+                            }
+                        )
+                    )
+                    Button(
+                        onClick = {
+                            searchBooks()
+                        },
+                        enabled = query.isNotBlank() && !isLoading
+                    ) {
+                        Text("Search")
                     }
-                },
-                modifier = Modifier.weight(1f),
-                label = {
-                    Text("Search for a book")
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        searchBooks()
-                    }
-                )
-            )
-            Button(
-                onClick = {
-                    searchBooks()
-                },
-                enabled = query.isNotBlank() && !isLoading
-            ) {
-                Text("Search")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         if (!hasSearched) {
             LazyColumn(
