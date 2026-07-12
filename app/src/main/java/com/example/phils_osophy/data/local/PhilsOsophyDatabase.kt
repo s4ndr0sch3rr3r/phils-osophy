@@ -13,9 +13,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedSeriesEntity::class,
         WatchedEpisodeEntity::class,
         SavedGameEntity::class,
-        SavedBookEntity::class
+        SavedBookEntity::class,
+        ProfileStatsCacheEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -29,6 +30,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
     abstract fun savedGameDao(): SavedGameDao
 
     abstract fun savedBookDao(): SavedBookDao
+
+    abstract fun profileStatsCacheDao(): ProfileStatsCacheDao
 
     companion object {
         @Volatile
@@ -157,6 +160,32 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration9To10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE TABLE IF NOT EXISTS profile_stats_cache (" +
+                        "id INTEGER NOT NULL, " +
+                        "movieMinutes INTEGER NOT NULL, " +
+                        "seriesMinutes INTEGER NOT NULL, " +
+                        "gameMinutes INTEGER NOT NULL, " +
+                        "movieCount INTEGER NOT NULL, " +
+                        "watchedEpisodeCount INTEGER NOT NULL, " +
+                        "gameCount INTEGER NOT NULL, " +
+                        "bookCount INTEGER NOT NULL, " +
+                        "finishedBookCount INTEGER NOT NULL, " +
+                        "calculatedAtEpochMillis INTEGER NOT NULL, " +
+                        "PRIMARY KEY(id))"
+                )
+                database.execSQL(
+                    "INSERT OR IGNORE INTO profile_stats_cache (" +
+                        "id, movieMinutes, seriesMinutes, gameMinutes, " +
+                        "movieCount, watchedEpisodeCount, gameCount, " +
+                        "bookCount, finishedBookCount, calculatedAtEpochMillis" +
+                        ") VALUES (1, 0, 0, 0, 0, 0, 0, 0, 0, 0)"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -172,7 +201,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration5To6,
                         migration6To7,
                         migration7To8,
-                        migration8To9
+                        migration8To9,
+                        migration9To10
                     )
                     .build()
                     .also { database ->
