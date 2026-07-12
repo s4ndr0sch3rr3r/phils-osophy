@@ -22,6 +22,7 @@ private val BlackColorScheme = darkColorScheme(
     onSurface = Color.White,
     surfaceVariant = Color(0xFF1A1A1A),
     onSurfaceVariant = Color(0xFFBDBDBD),
+    surfaceTint = Color.Transparent,
     error = Color(0xFFFF6B6B),
     onError = Color.Black,
     outline = Color(0xFF666666)
