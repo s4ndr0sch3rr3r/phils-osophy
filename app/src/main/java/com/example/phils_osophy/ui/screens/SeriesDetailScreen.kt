@@ -125,8 +125,7 @@ fun SeriesDetailScreen(
             episodeNumber = record.episodeNumber
         ) to record.watchedAtEpochMillis
     }
-    val effectiveWatchedEpisodes =
-        watchedEpisodes + watchedEpisodeDates.keys
+    val effectiveWatchedEpisodes = watchedEpisodes + watchedEpisodeDates.keys
     val seriesCompletedAtEpochMillis = seriesCompletionTimestamp(
         details = details,
         watchedEpisodeDates = watchedEpisodeDates
@@ -142,9 +141,7 @@ fun SeriesDetailScreen(
             expandedSeasonNumber = details
                 ?.seasons
                 .orEmpty()
-                .firstOrNull { season ->
-                    season.seasonNumber > 0
-                }
+                .firstOrNull { season -> season.seasonNumber > 0 }
                 ?.seasonNumber
         } catch (exception: Exception) {
             errorMessage = exception.localizedMessage
@@ -155,18 +152,15 @@ fun SeriesDetailScreen(
     }
 
     LaunchedEffect(expandedSeasonNumber) {
-        val seasonNumber = expandedSeasonNumber
-            ?: return@LaunchedEffect
+        val seasonNumber = expandedSeasonNumber ?: return@LaunchedEffect
 
         if (seasonCache[seasonNumber] == null) {
             loadingSeasonNumber = seasonNumber
-
             try {
-                seasonCache[seasonNumber] =
-                    TmdbClient.api.getSeasonDetails(
-                        seriesId = series.id,
-                        seasonNumber = seasonNumber
-                    )
+                seasonCache[seasonNumber] = TmdbClient.api.getSeasonDetails(
+                    seriesId = series.id,
+                    seasonNumber = seasonNumber
+                )
             } catch (_: Exception) {
                 // Collapse and reopen the season to retry.
             } finally {
@@ -186,101 +180,15 @@ fun SeriesDetailScreen(
         "$TMDB_SERIES_BACKDROP_BASE_URL$path"
     }
 
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-        ) {
-            if (imageUrl != null) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = "$title backdrop",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            MaterialTheme.colorScheme.surfaceVariant
-                        )
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.92f)
-                            )
-                        )
-                    )
-            )
-
-            TextButton(
-                onClick = onBackClick,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(start = 8.dp, top = 8.dp)
-            ) {
-                Text(
-                    text = "← Back",
-                    color = Color.White
-                )
-            }
-
-            TextButton(
-                onClick = {
-                    onFavoriteClick(!series.isFavorite)
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(end = 8.dp, top = 8.dp)
-            ) {
-                Text(
-                    text = if (series.isFavorite) "♥" else "♡",
-                    color = if (series.isFavorite) {
-                        Color(0xFFE53935)
-                    } else {
-                        Color.White
-                    },
-                    fontSize = 30.sp
-                )
-            }
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(24.dp)
-            ) {
-                Text(
-                    text = title,
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = seriesSubtitle(details),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-            }
-        }
+    Column(modifier = Modifier.fillMaxSize()) {
+        SeriesHero(
+            title = title,
+            subtitle = seriesSubtitle(details),
+            imageUrl = imageUrl,
+            isFavorite = series.isFavorite,
+            onBackClick = onBackClick,
+            onFavoriteClick = onFavoriteClick
+        )
 
         TabRow(selectedTabIndex = selectedTab) {
             Tab(
@@ -309,8 +217,7 @@ fun SeriesDetailScreen(
                 SeriesInfoTab(
                     series = series,
                     details = details,
-                    completedAtEpochMillis =
-                        seriesCompletedAtEpochMillis,
+                    completedAtEpochMillis = seriesCompletedAtEpochMillis,
                     errorMessage = errorMessage
                 )
             }
@@ -320,9 +227,7 @@ fun SeriesDetailScreen(
                     seasons = details
                         ?.seasons
                         .orEmpty()
-                        .filter { season ->
-                            season.seasonNumber > 0
-                        },
+                        .filter { season -> season.seasonNumber > 0 },
                     expandedSeasonNumber = expandedSeasonNumber,
                     loadingSeasonNumber = loadingSeasonNumber,
                     seasonCache = seasonCache,
@@ -336,9 +241,7 @@ fun SeriesDetailScreen(
                                 seasonNumber
                             }
                     },
-                    onSeasonWatchedClick = {
-                            seasonNumber,
-                            episodeCount ->
+                    onSeasonWatchedClick = { seasonNumber, episodeCount ->
                         coroutineScope.launch {
                             completionTracker.markSeasonWatched(
                                 seriesId = series.id,
@@ -348,10 +251,7 @@ fun SeriesDetailScreen(
                         }
                     },
                     onEpisodeClick = onEpisodeClick,
-                    onWatchedChange = {
-                            seasonNumber,
-                            episodeNumber,
-                            watched ->
+                    onWatchedChange = { seasonNumber, episodeNumber, watched ->
                         onWatchedChange(
                             seasonNumber,
                             episodeNumber,
@@ -368,6 +268,96 @@ fun SeriesDetailScreen(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SeriesHero(
+    title: String,
+    subtitle: String,
+    imageUrl: String?,
+    isFavorite: Boolean,
+    onBackClick: () -> Unit,
+    onFavoriteClick: (Boolean) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(300.dp)
+    ) {
+        if (imageUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "$title backdrop",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.92f)
+                        )
+                    )
+                )
+        )
+
+        TextButton(
+            onClick = onBackClick,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 8.dp, top = 8.dp)
+        ) {
+            Text("← Back", color = Color.White)
+        }
+
+        TextButton(
+            onClick = { onFavoriteClick(!isFavorite) },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = 8.dp, top = 8.dp)
+        ) {
+            Text(
+                text = if (isFavorite) "♥" else "♡",
+                color = if (isFavorite) Color(0xFFE53935) else Color.White,
+                fontSize = 30.sp
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(24.dp)
+        ) {
+            Text(
+                text = title,
+                color = Color.White,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = subtitle,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
@@ -414,9 +404,7 @@ private fun SeriesInfoTab(
             )
         }
 
-        item {
-            HorizontalDivider()
-        }
+        item { HorizontalDivider() }
 
         item {
             DetailValue(
@@ -425,6 +413,43 @@ private fun SeriesInfoTab(
                     ?.firstAirDate
                     ?.takeIf { date -> date.isNotBlank() }
                     ?: series.firstAirDate.ifBlank { "Unknown" }
+            )
+        }
+
+        item {
+            DetailValue(
+                label = "Rating",
+                value = details
+                    ?.voteAverage
+                    ?.takeIf { rating -> rating > 0.0 }
+                    ?.let { rating -> "%.1f / 10".format(rating) }
+                    ?: if (series.voteAverage > 0.0) {
+                        "%.1f / 10".format(series.voteAverage)
+                    } else {
+                        "Not rated"
+                    }
+            )
+        }
+
+        item {
+            DetailValue(
+                label = "Seasons",
+                value = details
+                    ?.numberOfSeasons
+                    ?.takeIf { count -> count > 0 }
+                    ?.toString()
+                    ?: "Unknown"
+            )
+        }
+
+        item {
+            DetailValue(
+                label = "Episodes",
+                value = details
+                    ?.numberOfEpisodes
+                    ?.takeIf { count -> count > 0 }
+                    ?.toString()
+                    ?: "Unknown"
             )
         }
 
@@ -517,8 +542,7 @@ private fun EpisodesTab(
             items = seasons,
             key = { season -> season.seasonNumber }
         ) { season ->
-            val isExpanded =
-                expandedSeasonNumber == season.seasonNumber
+            val isExpanded = expandedSeasonNumber == season.seasonNumber
             val watchedCount = watchedEpisodes.count { watched ->
                 watched.seasonNumber == season.seasonNumber
             }
@@ -565,8 +589,7 @@ private fun EpisodesTab(
 
                     seasonCache[season.seasonNumber] == null -> {
                         Text(
-                            text =
-                                "Tap the season again to retry loading.",
+                            text = "Tap the season again to retry loading.",
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -600,7 +623,6 @@ private fun EpisodesTab(
                                         )
                                     }
                                 )
-
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                     }
@@ -620,9 +642,7 @@ private fun SeasonHeader(
     onClick: () -> Unit,
     onWatchedClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -630,9 +650,7 @@ private fun SeasonHeader(
                 .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = season.name.ifBlank {
                         "Season ${season.seasonNumber}"
@@ -653,8 +671,7 @@ private fun SeasonHeader(
                             formatStoredDate(completedAtEpochMillis)
                         }",
                         style = MaterialTheme.typography.bodySmall,
-                        color =
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -670,10 +687,7 @@ private fun SeasonHeader(
                         },
                         shape = CircleShape
                     )
-                    .clickable(
-                        enabled = !isSeasonWatched,
-                        onClick = onWatchedClick
-                    ),
+                    .clickable(onClick = onWatchedClick),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
@@ -689,7 +703,6 @@ private fun SeasonHeader(
             }
 
             Spacer(modifier = Modifier.width(12.dp))
-
             Text(
                 text = if (isExpanded) "⌃" else "⌄",
                 style = MaterialTheme.typography.headlineSmall
@@ -723,9 +736,7 @@ private fun EpisodeRow(
                 modifier = Modifier
                     .width(148.dp)
                     .height(112.dp)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (imageUrl != null) {
@@ -789,11 +800,7 @@ private fun EpisodeRow(
             ) {
                 Text(
                     text = "✓",
-                    color = if (isWatched) {
-                        Color.White
-                    } else {
-                        Color.Gray
-                    },
+                    color = if (isWatched) Color.White else Color.Gray,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -830,8 +837,7 @@ private fun seriesCompletionTimestamp(
         ?.seasons
         .orEmpty()
         .filter { season ->
-            season.seasonNumber > 0 &&
-                season.episodeCount > 0
+            season.seasonNumber > 0 && season.episodeCount > 0
         }
 
     if (seasons.isEmpty()) {

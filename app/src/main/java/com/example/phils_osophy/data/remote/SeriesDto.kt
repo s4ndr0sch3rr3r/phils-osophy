@@ -41,6 +41,8 @@ data class SeriesDetailsDto(
     val firstAirDate: String = "",
     @SerialName("number_of_seasons")
     val numberOfSeasons: Int = 0,
+    @SerialName("number_of_episodes")
+    val numberOfEpisodes: Int = 0,
     @SerialName("vote_average")
     val voteAverage: Double = 0.0,
     val status: String = ""

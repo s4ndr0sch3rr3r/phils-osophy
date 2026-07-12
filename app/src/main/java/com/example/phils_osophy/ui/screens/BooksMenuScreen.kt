@@ -245,12 +245,8 @@ private fun BookLibraryScreen(
     var hasSearched by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var isSearchBarVisible by remember { mutableStateOf(true) }
-    var errorMessage by remember {
-        mutableStateOf<String?>(null)
-    }
-    var pendingBook by remember {
-        mutableStateOf<BookDto?>(null)
-    }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var pendingBook by remember { mutableStateOf<BookDto?>(null) }
     var managedBook by remember {
         mutableStateOf<SavedBookEntity?>(null)
     }
@@ -263,15 +259,9 @@ private fun BookLibraryScreen(
                 source: NestedScrollSource
             ): Offset {
                 when {
-                    available.y < -2f -> {
-                        isSearchBarVisible = false
-                    }
-
-                    available.y > 2f -> {
-                        isSearchBarVisible = true
-                    }
+                    available.y < -2f -> isSearchBarVisible = false
+                    available.y > 2f -> isSearchBarVisible = true
                 }
-
                 return Offset.Zero
             }
         }
@@ -385,29 +375,22 @@ private fun BookLibraryScreen(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = {
-                            Text("Search for a book")
-                        },
+                        label = { Text("Search for a book") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Search
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = {
-                                searchBooks()
-                            }
+                            onSearch = { searchBooks() }
                         )
                     )
                     Button(
-                        onClick = {
-                            searchBooks()
-                        },
+                        onClick = { searchBooks() },
                         enabled = query.isNotBlank() && !isLoading
                     ) {
                         Text("Search")
                     }
                 }
-
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -426,9 +409,7 @@ private fun BookLibraryScreen(
                         books = filtered(inProgressBooks),
                         onBookClick = onBookClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book ->
-                            managedBook = book
-                        }
+                        onManageClick = { book -> managedBook = book }
                     )
                 }
                 item {
@@ -437,9 +418,7 @@ private fun BookLibraryScreen(
                         books = filtered(finishedBooks),
                         onBookClick = onBookClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book ->
-                            managedBook = book
-                        }
+                        onManageClick = { book -> managedBook = book }
                     )
                 }
                 item {
@@ -448,9 +427,7 @@ private fun BookLibraryScreen(
                         books = filtered(toReadBooks),
                         onBookClick = onBookClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book ->
-                            managedBook = book
-                        }
+                        onManageClick = { book -> managedBook = book }
                     )
                 }
                 item {
@@ -459,9 +436,7 @@ private fun BookLibraryScreen(
                         books = filtered(abandonedBooks),
                         onBookClick = onBookClick,
                         onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book ->
-                            managedBook = book
-                        }
+                        onManageClick = { book -> managedBook = book }
                     )
                 }
             }
@@ -549,39 +524,65 @@ private fun BookShelf(
     onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit,
     onManageClick: (SavedBookEntity) -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-        Spacer(modifier = Modifier.height(10.dp))
+    var isExpanded by remember(title) {
+        mutableStateOf(true)
+    }
 
-        if (books.isEmpty()) {
-            Text("No books in this category.")
-            return
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                    isExpanded = !isExpanded
+                }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = if (isExpanded) "⌄" else "›",
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(end = 8.dp)
-        ) {
-            items(
-                items = books,
-                key = { book -> book.key }
-            ) { book ->
-                SavedBookCard(
-                    book = book,
-                    onBookClick = {
-                        onBookClick(book.key)
-                    },
-                    onFavoriteClick = {
-                        onFavoriteClick(book.key, !book.isFavorite)
-                    },
-                    onManageClick = {
-                        onManageClick(book)
+        AnimatedVisibility(visible = isExpanded) {
+            Column {
+                Spacer(modifier = Modifier.height(10.dp))
+                if (books.isEmpty()) {
+                    Text("No books in this category.")
+                } else {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(end = 8.dp)
+                    ) {
+                        items(
+                            items = books,
+                            key = { book -> book.key }
+                        ) { book ->
+                            SavedBookCard(
+                                book = book,
+                                onBookClick = {
+                                    onBookClick(book.key)
+                                },
+                                onFavoriteClick = {
+                                    onFavoriteClick(
+                                        book.key,
+                                        !book.isFavorite
+                                    )
+                                },
+                                onManageClick = {
+                                    onManageClick(book)
+                                }
+                            )
+                        }
                     }
-                )
+                }
             }
         }
     }
@@ -711,9 +712,7 @@ private fun BookAddDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = {
-            Text("Add ${book.title}")
-        },
+        title = { Text("Add ${book.title}") },
         text = {
             BookStatusOptions(
                 selectedStatus = selectedStatus,
@@ -751,9 +750,7 @@ private fun BookManageDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = {
-            Text(book.title)
-        },
+        title = { Text(book.title) },
         text = {
             Column {
                 Text(
@@ -770,7 +767,8 @@ private fun BookManageDialog(
                             progress == 100 -> BookStatus.FINISHED
                             selectedStatus == BookStatus.FINISHED ->
                                 BookStatus.IN_PROGRESS
-                            progress > 0 && selectedStatus == BookStatus.TO_READ ->
+                            progress > 0 &&
+                                selectedStatus == BookStatus.TO_READ ->
                                 BookStatus.IN_PROGRESS
                             else -> selectedStatus
                         }
