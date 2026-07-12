@@ -1038,6 +1038,19 @@ private fun BookDetailScreen(
             }
         )
     }
+
+    if (showRatingDialog) {
+        UserRatingDialog(
+            title = "Rate ${book.title}",
+            initialRating = book.userRating,
+            onSave = { rating ->
+                onChangeRating(rating)
+                showRatingDialog = false
+            },
+            onCancel = { showRatingDialog = false }
+        )
+    }
+
 }
 
 @Composable
@@ -1093,18 +1106,6 @@ private fun DetailLine(
 }
 
 
-    if (showRatingDialog) {
-        UserRatingDialog(
-            title = "Rate ${book.title}",
-            initialRating = book.userRating,
-            onSave = { rating ->
-                onChangeRating(rating)
-                showRatingDialog = false
-            },
-            onCancel = { showRatingDialog = false }
-        )
-    }
-}
 @Composable
 private fun BookCover(
     coverId: Int?,
