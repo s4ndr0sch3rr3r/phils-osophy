@@ -352,8 +352,8 @@ private fun MovieManageDialog(
         text = {
             Column {
                 Text(
-                    text = if (movie.userRating in 1..10) {
-                        "Your rating: ${movie.userRating} / 10"
+                    text = if (movie.userRating in 1..USER_RATING_MAX) {
+                        "Your rating: ${movie.userRating} / $USER_RATING_MAX"
                     } else {
                         "Not rated"
                     }
@@ -361,7 +361,7 @@ private fun MovieManageDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onChangeRating) {
                     Text(
-                        if (movie.userRating in 1..10) {
+                        if (movie.userRating in 1..USER_RATING_MAX) {
                             "Change rating"
                         } else {
                             "Add rating"

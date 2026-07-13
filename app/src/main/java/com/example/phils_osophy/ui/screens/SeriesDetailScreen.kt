@@ -436,8 +436,8 @@ private fun SeriesInfoTab(
         item {
             DetailValue(
                 label = "Your rating",
-                value = if (series.userRating in 1..10) {
-                    "${series.userRating} / 10"
+                value = if (series.userRating in 1..USER_RATING_MAX) {
+                    "${series.userRating} / $USER_RATING_MAX"
                 } else {
                     "Not rated"
                 }

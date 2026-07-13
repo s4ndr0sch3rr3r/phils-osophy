@@ -29,6 +29,7 @@ import com.example.phils_osophy.ui.screens.MovieSearchScreen
 import com.example.phils_osophy.ui.screens.ProfileScreen
 import com.example.phils_osophy.ui.screens.SeriesDetailScreen
 import com.example.phils_osophy.ui.screens.SeriesLibraryScreen
+import com.example.phils_osophy.ui.screens.USER_RATING_MAX
 import kotlinx.coroutines.launch
 
 @Composable
@@ -240,7 +241,7 @@ fun App() {
                         coroutineScope.launch {
                             savedMovieDao.updateRating(
                                 movieId = movieId,
-                                userRating = rating.coerceIn(0, 10)
+                                userRating = rating.coerceIn(0, USER_RATING_MAX)
                             )
                         }
                     },
@@ -272,7 +273,7 @@ fun App() {
                         coroutineScope.launch {
                             savedMovieDao.updateRating(
                                 movieId = movieId,
-                                userRating = rating.coerceIn(0, 10)
+                                userRating = rating.coerceIn(0, USER_RATING_MAX)
                             )
                         }
                     },
@@ -307,7 +308,7 @@ fun App() {
                             coroutineScope.launch {
                                 savedMovieDao.updateRating(
                                     movieId = selectedMovie.id,
-                                    userRating = rating.coerceIn(0, 10)
+                                    userRating = rating.coerceIn(0, USER_RATING_MAX)
                                 )
                             }
                         },
@@ -365,7 +366,7 @@ fun App() {
                         coroutineScope.launch {
                             savedSeriesDao.updateRating(
                                 seriesId = seriesId,
-                                userRating = rating.coerceIn(0, 10)
+                                userRating = rating.coerceIn(0, USER_RATING_MAX)
                             )
                         }
                     },
@@ -402,7 +403,7 @@ fun App() {
                             coroutineScope.launch {
                                 savedSeriesDao.updateRating(
                                     seriesId = selectedSeries.id,
-                                    userRating = rating.coerceIn(0, 10)
+                                    userRating = rating.coerceIn(0, USER_RATING_MAX)
                                 )
                             }
                         },
@@ -538,7 +539,7 @@ fun App() {
                         coroutineScope.launch {
                             savedGameDao.updateRating(
                                 gameId = gameId,
-                                userRating = rating.coerceIn(0, 10)
+                                userRating = rating.coerceIn(0, USER_RATING_MAX)
                             )
                         }
                     },

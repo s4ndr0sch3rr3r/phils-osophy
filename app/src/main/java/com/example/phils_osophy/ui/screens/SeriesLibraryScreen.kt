@@ -791,7 +791,7 @@ private fun LibraryManageDialog(
                 Spacer(modifier = Modifier.height(8.dp))
                 TextButton(onClick = onChangeRating) {
                     Text(
-                        if (series.userRating in 1..10) {
+                        if (series.userRating in 1..USER_RATING_MAX) {
                             "Change rating"
                         } else {
                             "Add rating"

@@ -481,7 +481,7 @@ private fun GameDetailContent(
             )
 
             TextButton(onClick = { isRatingDialogVisible = true }) {
-                Text(if (game.userRating in 1..10) "${game.userRating}/10" else "Rate")
+                Text(if (game.userRating in 1..USER_RATING_MAX) "${game.userRating}/$USER_RATING_MAX" else "Rate")
             }
         }
 
