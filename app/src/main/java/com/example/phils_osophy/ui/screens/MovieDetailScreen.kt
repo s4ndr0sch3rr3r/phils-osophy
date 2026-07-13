@@ -306,14 +306,6 @@ fun MovieDetailScreen(
         Column(
             modifier = Modifier.padding(24.dp)
         ) {
-            Text(
-                text = "Movie information",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             if (isLoading) {
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth()
