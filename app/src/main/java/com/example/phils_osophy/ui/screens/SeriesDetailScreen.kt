@@ -401,14 +401,6 @@ private fun SeriesInfoTab(
         contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        item {
-            Text(
-                text = "Series information",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
         if (errorMessage != null) {
             item {
                 Text(
