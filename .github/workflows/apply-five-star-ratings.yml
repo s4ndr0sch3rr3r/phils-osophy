@@ -1,0 +1,37 @@
+name: Apply five-star user ratings
+
+on:
+  push:
+    branches:
+      - agent/five-star-user-ratings
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/five-star-user-ratings
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python .github/scripts/apply_five_star_ratings.py
+      - run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/example/phils_osophy/App.kt
+          git add app/src/main/java/com/example/phils_osophy/data/local/PhilsOsophyDatabase.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/AddMovieDialog.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/ChangeMovieRatingDialog.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/GameLibraryScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/SeriesDetailScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/UserRatingComponents.kt
+          git commit -m "Convert user ratings to five stars"
+          git push
