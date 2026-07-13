@@ -75,9 +75,6 @@ fun MovieDetailScreen(
     var isMenuExpanded by remember {
         mutableStateOf(false)
     }
-    var isRatingDialogVisible by remember {
-        mutableStateOf(false)
-    }
     var comment by remember(movie.id, movie.note) {
         mutableStateOf(movie.note)
     }
@@ -233,16 +230,6 @@ fun MovieDetailScreen(
 
                     DropdownMenuItem(
                         text = {
-                            Text("Change rating")
-                        },
-                        onClick = {
-                            isMenuExpanded = false
-                            isRatingDialogVisible = true
-                        }
-                    )
-
-                    DropdownMenuItem(
-                        text = {
                             Text(
                                 text = "Remove movie",
                                 color = MaterialTheme.colorScheme.error
@@ -331,6 +318,13 @@ fun MovieDetailScreen(
                 },
                 style = MaterialTheme.typography.bodyLarge
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            InlineUserRatingStars(
+                rating = movie.userRating,
+                onRatingChange = onChangeRating
+            )
         }
 
         HorizontalDivider()
@@ -378,18 +372,6 @@ fun MovieDetailScreen(
         }
     }
 
-    if (isRatingDialogVisible) {
-        ChangeMovieRatingDialog(
-            initialRating = movie.userRating,
-            onSave = { rating ->
-                onChangeRating(rating)
-                isRatingDialogVisible = false
-            },
-            onCancel = {
-                isRatingDialogVisible = false
-            }
-        )
-    }
 }
 
 @Composable

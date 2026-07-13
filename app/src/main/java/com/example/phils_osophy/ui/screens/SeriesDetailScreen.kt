@@ -103,9 +103,6 @@ fun SeriesDetailScreen(
     var loadingSeasonNumber by remember(series.id) {
         mutableStateOf<Int?>(null)
     }
-    var isRatingDialogVisible by remember(series.id) {
-        mutableStateOf(false)
-    }
 
     val seasonCache = remember(series.id) {
         mutableStateMapOf<Int, SeasonDetailsDto>()
@@ -223,7 +220,7 @@ fun SeriesDetailScreen(
                     details = details,
                     completedAtEpochMillis = seriesCompletedAtEpochMillis,
                     errorMessage = errorMessage,
-                    onChangeRatingClick = { isRatingDialogVisible = true },
+                    onRatingChange = onChangeRating,
                     onSaveComment = { comment ->
                         coroutineScope.launch {
                             database.savedSeriesDao().updateNote(
@@ -284,17 +281,6 @@ fun SeriesDetailScreen(
         }
     }
 
-    if (isRatingDialogVisible) {
-        UserRatingDialog(
-            title = "Rate ${series.name}",
-            initialRating = series.userRating,
-            onSave = { rating ->
-                onChangeRating(rating)
-                isRatingDialogVisible = false
-            },
-            onCancel = { isRatingDialogVisible = false }
-        )
-    }
 }
 
 @Composable
@@ -393,7 +379,7 @@ private fun SeriesInfoTab(
     details: SeriesDetailsDto?,
     completedAtEpochMillis: Long?,
     errorMessage: String?,
-    onChangeRatingClick: () -> Unit,
+    onRatingChange: (Int) -> Unit,
     onSaveComment: (String) -> Unit
 ) {
     LazyColumn(
@@ -423,21 +409,14 @@ private fun SeriesInfoTab(
             )
         }
 
-        item { HorizontalDivider() }
-
         item {
-            DetailValue(
-                label = "Your rating",
-                value = if (series.userRating in 1..USER_RATING_MAX) {
-                    "${series.userRating} / $USER_RATING_MAX"
-                } else {
-                    "Not rated"
-                }
+            InlineUserRatingStars(
+                rating = series.userRating,
+                onRatingChange = onRatingChange
             )
-            TextButton(onClick = onChangeRatingClick) {
-                Text("Change rating")
-            }
         }
+
+        item { HorizontalDivider() }
 
         item {
             DetailValue(
