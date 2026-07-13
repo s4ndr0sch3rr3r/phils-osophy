@@ -186,7 +186,7 @@ fun BooksMenuScreen(
                     coroutineScope.launch {
                         savedBookDao.updateRating(
                             bookKey = selectedBook.key,
-                            userRating = rating.coerceIn(0, 10)
+                            userRating = rating.coerceIn(0, USER_RATING_MAX)
                         )
                     }
                 },
@@ -234,7 +234,7 @@ fun BooksMenuScreen(
             coroutineScope.launch {
                 savedBookDao.updateRating(
                     bookKey = bookKey,
-                    userRating = rating.coerceIn(0, 10)
+                    userRating = rating.coerceIn(0, USER_RATING_MAX)
                 )
             }
         },
@@ -880,7 +880,7 @@ private fun BookManageDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(onClick = onChangeRating) {
                     Text(
-                        if (book.userRating in 1..10) {
+                        if (book.userRating in 1..USER_RATING_MAX) {
                             "Change rating"
                         } else {
                             "Add rating"
@@ -989,7 +989,7 @@ private fun BookDetailScreen(
                 style = MaterialTheme.typography.headlineMedium
             )
             TextButton(onClick = { showRatingDialog = true }) {
-                Text(if (book.userRating in 1..10) "${book.userRating}/10" else "Rate")
+                Text(if (book.userRating in 1..USER_RATING_MAX) "${book.userRating}/$USER_RATING_MAX" else "Rate")
             }
             TextButton(
                 onClick = {

@@ -39,7 +39,7 @@ fun ChangeMovieRatingDialog(
     onCancel: () -> Unit
 ) {
     var selectedRating by remember(initialRating) {
-        mutableStateOf(initialRating.coerceIn(0, 10))
+        mutableStateOf(initialRating.coerceIn(0, USER_RATING_MAX))
     }
 
     Dialog(
@@ -70,7 +70,7 @@ fun ChangeMovieRatingDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Your rating: $selectedRating / 10",
+                    text = "Your rating: $selectedRating / $USER_RATING_MAX",
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -80,7 +80,7 @@ fun ChangeMovieRatingDialog(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    (1..10).forEach { star ->
+                    (1..USER_RATING_MAX).forEach { star ->
                         Box(
                             modifier = Modifier
                                 .weight(1f)

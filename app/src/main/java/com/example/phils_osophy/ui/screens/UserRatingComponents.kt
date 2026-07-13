@@ -31,12 +31,14 @@ import androidx.compose.ui.unit.sp
 private val UserRatingBadgeColor = Color(0xFFD32F2F)
 private val SelectedRatingStarColor = Color(0xFFFFC107)
 
+const val USER_RATING_MAX = 5
+
 @Composable
 fun BoxScope.UserRatingBadge(
     rating: Int,
     modifier: Modifier = Modifier
 ) {
-    if (rating !in 1..10) return
+    if (rating !in 1..USER_RATING_MAX) return
 
     Box(
         modifier = Modifier.align(Alignment.TopEnd),
@@ -67,7 +69,7 @@ fun UserRatingDialog(
     onCancel: () -> Unit
 ) {
     var selectedRating by remember(title, initialRating) {
-        mutableStateOf(initialRating.coerceIn(0, 10))
+        mutableStateOf(initialRating.coerceIn(0, USER_RATING_MAX))
     }
 
     AlertDialog(
@@ -79,7 +81,7 @@ fun UserRatingDialog(
                 horizontalArrangement = Arrangement.spacedBy(1.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                (1..10).forEach { star ->
+                (1..USER_RATING_MAX).forEach { star ->
                     Box(
                         modifier = Modifier
                             .weight(1f)

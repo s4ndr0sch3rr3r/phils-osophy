@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedBookEntity::class,
         ProfileStatsCacheEntity::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -216,6 +216,27 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration12To13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                listOf(
+                    "saved_movies",
+                    "saved_series",
+                    "saved_games",
+                    "saved_books"
+                ).forEach { tableName ->
+                    database.execSQL(
+                        "UPDATE $tableName SET userRating = CASE " +
+                            "WHEN userRating <= 0 THEN 0 " +
+                            "WHEN userRating <= 2 THEN 1 " +
+                            "WHEN userRating <= 4 THEN 2 " +
+                            "WHEN userRating <= 6 THEN 3 " +
+                            "WHEN userRating <= 8 THEN 4 " +
+                            "ELSE 5 END"
+                    )
+                }
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -234,7 +255,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration8To9,
                         migration9To10,
                         migration10To11,
-                        migration11To12
+                        migration11To12,
+                        migration12To13
                     )
                     .build()
                     .also { database ->
