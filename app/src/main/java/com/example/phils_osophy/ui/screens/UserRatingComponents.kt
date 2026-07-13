@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 
 private val UserRatingBadgeColor = Color(0xFFD32F2F)
 private val SelectedRatingStarColor = Color(0xFFFFC107)
+private val UnselectedRatingStarColor = Color(0xFF808080)
 
 const val USER_RATING_MAX = 5
 
@@ -57,6 +58,45 @@ fun BoxScope.UserRatingBadge(
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold
             )
+        }
+    }
+}
+
+@Composable
+fun InlineUserRatingStars(
+    rating: Int,
+    onRatingChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val selectedRating = rating.coerceIn(0, USER_RATING_MAX)
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        (1..USER_RATING_MAX).forEach { star ->
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .clickable {
+                        onRatingChange(
+                            if (selectedRating == star) 0 else star
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "★",
+                    color = if (star <= selectedRating) {
+                        SelectedRatingStarColor
+                    } else {
+                        UnselectedRatingStarColor
+                    },
+                    fontSize = 38.sp
+                )
+            }
         }
     }
 }
