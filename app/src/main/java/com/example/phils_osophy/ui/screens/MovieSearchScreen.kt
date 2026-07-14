@@ -1,5 +1,6 @@
 package com.example.phils_osophy.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
@@ -70,6 +75,7 @@ fun MovieSearchScreen(
     var isLoading by remember { mutableStateOf(false) }
     var hasSearched by remember { mutableStateOf(false) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
+    var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember {
         mutableStateOf<String?>(null)
     }
@@ -95,6 +101,20 @@ fun MovieSearchScreen(
     }
 
     val coroutineScope = rememberCoroutineScope()
+    val searchBarScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                when {
+                    available.y < -2f -> isSearchBarVisible = false
+                    available.y > 2f -> isSearchBarVisible = true
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     val resetSearch = {
         hasSearched = false
@@ -136,6 +156,7 @@ fun MovieSearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .nestedScroll(searchBarScrollConnection)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(16.dp)
@@ -156,6 +177,7 @@ fun MovieSearchScreen(
                 onClick = {
                     showFavoritesOnly = !showFavoritesOnly
                     query = ""
+                    isSearchBarVisible = true
                     resetSearch()
                 }
             ) {
@@ -170,50 +192,54 @@ fun MovieSearchScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { newQuery ->
-                    query = newQuery
+        AnimatedVisibility(visible = isSearchBarVisible) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { newQuery ->
+                            query = newQuery
 
-                    if (newQuery.isBlank()) {
-                        resetSearch()
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                label = {
-                    Text(
-                        if (showFavoritesOnly) {
-                            "Search within favorites"
-                        } else {
-                            "Search for a movie"
-                        }
+                            if (newQuery.isBlank()) {
+                                resetSearch()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = {
+                            Text(
+                                if (showFavoritesOnly) {
+                                    "Search within favorites"
+                                } else {
+                                    "Search for a movie"
+                                }
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                searchMovies()
+                            }
+                        )
                     )
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Search
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = {
-                        searchMovies()
-                    }
-                )
-            )
 
-            Button(
-                onClick = searchMovies,
-                enabled = query.isNotBlank() && !isLoading
-            ) {
-                Text("Search")
+                    Button(
+                        onClick = searchMovies,
+                        enabled = query.isNotBlank() && !isLoading
+                    ) {
+                        Text("Search")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         if (showFavoritesOnly || !hasSearched) {
             if (showFavoritesOnly) {
