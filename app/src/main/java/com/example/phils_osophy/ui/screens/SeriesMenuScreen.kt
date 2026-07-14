@@ -55,6 +55,7 @@ import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.SeriesStatus
 import com.example.phils_osophy.data.remote.SeriesDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import kotlinx.coroutines.launch
 
 private const val TMDB_SERIES_POSTER_BASE_URL =
@@ -186,14 +187,11 @@ fun SeriesMenuScreen(
                     resetSearch()
                 }
             ) {
-                Text(
-                    text = if (showFavoritesOnly) "♥" else "♡",
-                    color = if (showFavoritesOnly) {
-                        SeriesFavoriteColor
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    fontSize = 30.sp
+                FavoriteIcon(
+                    isFavorite = showFavoritesOnly,
+                    size = 30.dp,
+                    activeColor = SeriesFavoriteColor,
+                    inactiveColor = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -521,8 +519,8 @@ private fun SavedSeriesPoster(
                     )
                 }
 
-                Text(
-                    text = if (series.isFavorite) "♥" else "♡",
+                FavoriteIcon(
+                    isFavorite = series.isFavorite,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp)
@@ -532,12 +530,9 @@ private fun SavedSeriesPoster(
                         )
                         .clickable(onClick = onFavoriteClick)
                         .padding(horizontal = 7.dp, vertical = 3.dp),
-                    color = if (series.isFavorite) {
-                        SeriesFavoriteColor
-                    } else {
-                        Color.White
-                    },
-                    fontSize = 20.sp
+                    size = 20.dp,
+                    activeColor = SeriesFavoriteColor,
+                    inactiveColor = Color.White
                 )
             }
 
