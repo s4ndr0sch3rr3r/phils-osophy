@@ -34,8 +34,14 @@ jobs:
           if old in text:
               path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
-          python .github/scripts/apply_unified_favorite_icons.py > .github/favorite-transform.log 2>&1
-          code=$?
+          python .github/scripts/apply_series_menu_favorite_icons.py > .github/favorite-transform.log 2>&1
+          series_code=$?
+          if [ "$series_code" -eq 0 ]; then
+            python .github/scripts/apply_unified_favorite_icons.py >> .github/favorite-transform.log 2>&1
+            code=$?
+          else
+            code=$series_code
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/java .github/scripts/apply_unified_favorite_icons.py .github/favorite-transform.log
