@@ -1,12 +1,11 @@
 name: Apply lazy library sections
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/lazy-expandable-library-sections
-    paths:
-      - tools/apply_lazy_library_sections.py
-      - .github/workflows/apply-lazy-library-sections.yml
+      - main
+    types:
+      - opened
 
 permissions:
   contents: write
