@@ -1,0 +1,35 @@
+name: Fix detail page manage menus
+
+on:
+  push:
+    branches:
+      - agent/detail-page-manage-menus
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/detail-page-manage-menus
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Correct generated source
+        run: python .github/scripts/fix_detail_page_manage_menus.py
+      - name: Commit corrections
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/MovieListScreen.kt \
+            app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          if git diff --cached --quiet; then
+            echo "No corrections needed"
+          else
+            git commit -m "Correct detail menu layout"
+            git push origin HEAD:agent/detail-page-manage-menus
+          fi
