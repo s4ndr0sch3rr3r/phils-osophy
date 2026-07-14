@@ -80,11 +80,11 @@ fun MovieSearchScreen(
         mutableStateOf<String?>(null)
     }
 
-    val savedMovieIds = savedMovies
-        .map { movie -> movie.id }
-        .toSet()
-    val favoriteMovies = savedMovies.filter { movie ->
-        movie.isFavorite
+    val savedMovieIds = remember(savedMovies) {
+        savedMovies.map { movie -> movie.id }.toSet()
+    }
+    val favoriteMovies = remember(savedMovies) {
+        savedMovies.filter { movie -> movie.isFavorite }
     }
     val visibleSavedMovies = when {
         showFavoritesOnly && hasSearched -> {
@@ -168,7 +168,7 @@ fun MovieSearchScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Movies",
+                text = "Movies (${savedMovies.size})",
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )

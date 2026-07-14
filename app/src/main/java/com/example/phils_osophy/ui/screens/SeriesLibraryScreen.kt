@@ -117,15 +117,22 @@ fun SeriesLibraryScreen(
         }
     }
 
-    val allSavedSeries = (
-        inProgressSeries +
-            finishedSeries +
-            toWatchSeries +
-            stoppedSeries
-        ).distinctBy { series -> series.id }
-    val savedSeriesIds = allSavedSeries
-        .map { series -> series.id }
-        .toSet()
+    val allSavedSeries = remember(
+        inProgressSeries,
+        finishedSeries,
+        toWatchSeries,
+        stoppedSeries
+    ) {
+        (
+            inProgressSeries +
+                finishedSeries +
+                toWatchSeries +
+                stoppedSeries
+            ).distinctBy { series -> series.id }
+    }
+    val savedSeriesIds = remember(allSavedSeries) {
+        allSavedSeries.map { series -> series.id }.toSet()
+    }
 
     fun resetSearch() {
         hasSearched = false
@@ -190,7 +197,7 @@ fun SeriesLibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Series",
+                text = "Series (${allSavedSeries.size})",
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )

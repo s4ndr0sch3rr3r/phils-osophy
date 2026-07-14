@@ -275,15 +275,22 @@ private fun BookLibraryScreen(
             }
         }
     }
-    val allSavedBooks = (
-        inProgressBooks +
-            finishedBooks +
-            toReadBooks +
-            abandonedBooks
-        ).distinctBy { book -> book.key }
-    val savedBookKeys = allSavedBooks
-        .map { book -> book.key }
-        .toSet()
+    val allSavedBooks = remember(
+        inProgressBooks,
+        finishedBooks,
+        toReadBooks,
+        abandonedBooks
+    ) {
+        (
+            inProgressBooks +
+                finishedBooks +
+                toReadBooks +
+                abandonedBooks
+            ).distinctBy { book -> book.key }
+    }
+    val savedBookKeys = remember(allSavedBooks) {
+        allSavedBooks.map { book -> book.key }.toSet()
+    }
 
     fun resetSearch() {
         hasSearched = false
@@ -340,7 +347,7 @@ private fun BookLibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Books",
+                text = "Books (${allSavedBooks.size})",
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
