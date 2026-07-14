@@ -28,12 +28,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -46,14 +48,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.example.phils_osophy.data.local.RecipeStatus
 import com.example.phils_osophy.data.local.SavedRecipeEntity
+import com.example.phils_osophy.data.remote.MealDbClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
 import java.util.Locale
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 private val RecipeFavoriteColor = Color(0xFFE53935)
 
@@ -71,10 +81,21 @@ fun RecipeLibraryScreen(
     BackHandler(onBack = onBackClick)
 
     var query by remember { mutableStateOf("") }
-    var searchedTitle by remember { mutableStateOf<String?>(null) }
+    var searchedQuery by remember { mutableStateOf<String?>(null) }
+    var searchResults by remember {
+        mutableStateOf<List<RecipeSearchResult>>(emptyList())
+    }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var isSearchBarVisible by remember { mutableStateOf(true) }
-    var pendingRecipeTitle by remember { mutableStateOf<String?>(null) }
+    var pendingRecipe by remember {
+        mutableStateOf<RecipeSearchResult?>(null)
+    }
+    val recipeImageUrls = remember {
+        mutableStateMapOf<String, String?>()
+    }
+    val imageLookupSemaphore = remember { Semaphore(permits = 4) }
     val expandedSections = remember {
         mutableStateMapOf<String, Boolean>()
     }
@@ -110,19 +131,57 @@ fun RecipeLibraryScreen(
         allRecipes.map { recipe -> recipe.key }.toSet()
     }
 
+    LaunchedEffect(savedRecipeKeys) {
+        recipeImageUrls.keys
+            .filter { recipeKey -> recipeKey !in savedRecipeKeys }
+            .forEach { staleKey -> recipeImageUrls.remove(staleKey) }
+    }
+
+    LaunchedEffect(searchedQuery) {
+        val activeQuery = searchedQuery ?: return@LaunchedEffect
+        val localResult = RecipeSearchResult(
+            key = "local:${activeQuery.lowercase(Locale.ROOT)}",
+            title = activeQuery,
+            imageUrl = null
+        )
+
+        isSearching = true
+        searchError = null
+        try {
+            val remoteResults = MealDbClient.searchMeals(activeQuery)
+                .map { meal ->
+                    RecipeSearchResult(
+                        key = "mealdb:${meal.id}",
+                        title = meal.name.trim(),
+                        imageUrl = meal.thumbnailUrl
+                    )
+                }
+            searchResults = remoteResults.ifEmpty { listOf(localResult) }
+        } catch (_: Exception) {
+            searchError =
+                "Recipe images could not be loaded. You can still add the entered title."
+            searchResults = listOf(localResult)
+        } finally {
+            isSearching = false
+        }
+    }
+
     fun filtered(recipes: List<SavedRecipeEntity>): List<SavedRecipeEntity> =
         recipes.filter { recipe ->
             !showFavoritesOnly || recipe.isFavorite
         }
 
     fun performSearch() {
-        searchedTitle = query.trim()
-            .replace(Regex("\\s+"), " ")
+        searchedQuery = query.trim()
+            .replace(Regex("\s+"), " ")
             .takeIf { title -> title.isNotBlank() }
     }
 
     fun resetSearch() {
-        searchedTitle = null
+        searchedQuery = null
+        searchResults = emptyList()
+        searchError = null
+        isSearching = false
     }
 
     Column(
@@ -199,7 +258,7 @@ fun RecipeLibraryScreen(
             }
         }
 
-        if (searchedTitle == null) {
+        if (searchedQuery == null) {
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
@@ -215,7 +274,9 @@ fun RecipeLibraryScreen(
                             expandedSections["En cours"] != true
                     },
                     onRecipeClick = onRecipeClick,
-                    onFavoriteClick = onFavoriteClick
+                    onFavoriteClick = onFavoriteClick,
+                    imageUrls = recipeImageUrls,
+                    imageLookupSemaphore = imageLookupSemaphore
                 )
                 recipeSectionItems(
                     title = "Recettes terminées",
@@ -226,7 +287,9 @@ fun RecipeLibraryScreen(
                             expandedSections["Recettes terminées"] != true
                     },
                     onRecipeClick = onRecipeClick,
-                    onFavoriteClick = onFavoriteClick
+                    onFavoriteClick = onFavoriteClick,
+                    imageUrls = recipeImageUrls,
+                    imageLookupSemaphore = imageLookupSemaphore
                 )
                 recipeSectionItems(
                     title = "Recettes à essayer",
@@ -237,7 +300,9 @@ fun RecipeLibraryScreen(
                             expandedSections["Recettes à essayer"] != true
                     },
                     onRecipeClick = onRecipeClick,
-                    onFavoriteClick = onFavoriteClick
+                    onFavoriteClick = onFavoriteClick,
+                    imageUrls = recipeImageUrls,
+                    imageLookupSemaphore = imageLookupSemaphore
                 )
                 recipeSectionItems(
                     title = "Recettes abandonnées",
@@ -248,41 +313,72 @@ fun RecipeLibraryScreen(
                             expandedSections["Recettes abandonnées"] != true
                     },
                     onRecipeClick = onRecipeClick,
-                    onFavoriteClick = onFavoriteClick
+                    onFavoriteClick = onFavoriteClick,
+                    imageUrls = recipeImageUrls,
+                    imageLookupSemaphore = imageLookupSemaphore
                 )
             }
         } else {
-            val title = searchedTitle.orEmpty()
-            val recipeKey = title.lowercase(Locale.ROOT)
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                RecipeSearchResult(
-                    title = title,
-                    isAdded = recipeKey in savedRecipeKeys,
-                    modifier = Modifier.fillMaxWidth(),
-                    onAddClick = {
-                        pendingRecipeTitle = title
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            if (isSearching) {
+                item(key = "recipe-search-loading") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(96.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
                     }
-                )
+                }
+            }
+
+            searchError?.let { message ->
+                item(key = "recipe-search-error") {
+                    Text(
+                        text = message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            searchResults.forEach { result ->
+                item(key = result.key) {
+                    RecipeSearchResultCard(
+                        result = result,
+                        isAdded = result.title
+                            .trim()
+                            .lowercase(Locale.ROOT) in savedRecipeKeys,
+                        onAddClick = { pendingRecipe = result }
+                    )
+                }
             }
         }
     }
+    }
 
-    pendingRecipeTitle?.let { title ->
+    pendingRecipe?.let { result ->
         RecipeAddDialog(
-            title = title,
+            title = result.title,
             onAdd = { status ->
-                onAddRecipe(title, status)
-                pendingRecipeTitle = null
+                onAddRecipe(result.title, status)
+                result.imageUrl?.let { imageUrl ->
+                    recipeImageUrls[
+                        result.title.trim().lowercase(Locale.ROOT)
+                    ] = imageUrl
+                }
+                pendingRecipe = null
                 query = ""
                 resetSearch()
             },
-            onCancel = {
-                pendingRecipeTitle = null
-            }
+            onCancel = { pendingRecipe = null }
         )
     }
 
@@ -294,7 +390,9 @@ private fun LazyListScope.recipeSectionItems(
     isExpanded: Boolean,
     onToggleExpanded: () -> Unit,
     onRecipeClick: (String) -> Unit,
-    onFavoriteClick: (recipeKey: String, isFavorite: Boolean) -> Unit
+    onFavoriteClick: (recipeKey: String, isFavorite: Boolean) -> Unit,
+    imageUrls: MutableMap<String, String?>,
+    imageLookupSemaphore: Semaphore
 ) {
     val sectionKey = "recipe-section-$title"
 
@@ -365,6 +463,8 @@ private fun LazyListScope.recipeSectionItems(
                         val recipe = recipes[recipeIndex]
                         RecipeCard(
                             recipe = recipe,
+                            imageUrls = imageUrls,
+                            imageLookupSemaphore = imageLookupSemaphore,
                             onClick = {
                                 onRecipeClick(recipe.key)
                             },
@@ -394,6 +494,8 @@ private fun LazyListScope.recipeSectionItems(
                     ) { recipe ->
                         RecipeCard(
                             recipe = recipe,
+                            imageUrls = imageUrls,
+                            imageLookupSemaphore = imageLookupSemaphore,
                             onClick = {
                                 onRecipeClick(recipe.key)
                             },
@@ -418,9 +520,24 @@ private fun LazyListScope.recipeSectionItems(
 @Composable
 private fun RecipeCard(
     recipe: SavedRecipeEntity,
+    imageUrls: MutableMap<String, String?>,
+    imageLookupSemaphore: Semaphore,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit
 ) {
+    val isImageResolved = imageUrls.containsKey(recipe.key)
+    val imageUrl = imageUrls[recipe.key]
+
+    LaunchedEffect(recipe.key, recipe.title) {
+        if (!imageUrls.containsKey(recipe.key)) {
+            imageUrls[recipe.key] = imageLookupSemaphore.withPermit {
+                runCatching {
+                    MealDbClient.findClosestMeal(recipe.title)?.thumbnailUrl
+                }.getOrNull()
+            }
+        }
+    }
+
     Column(modifier = Modifier.width(104.dp)) {
         Card(
             modifier = Modifier
@@ -430,8 +547,38 @@ private fun RecipeCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
             ) {
+                when {
+                    !imageUrl.isNullOrBlank() -> {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(imageUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = "${recipe.title} image",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+
+                    !isImageResolved -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+
+                    else -> {
+                        Text(
+                            text = recipe.title.take(1).uppercase(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 FavoriteIcon(
                     isFavorite = recipe.isFavorite,
                     modifier = Modifier
@@ -453,14 +600,19 @@ private fun RecipeCard(
     }
 }
 
+private data class RecipeSearchResult(
+    val key: String,
+    val title: String,
+    val imageUrl: String?
+)
+
 @Composable
-private fun RecipeSearchResult(
-    title: String,
+private fun RecipeSearchResultCard(
+    result: RecipeSearchResult,
     isAdded: Boolean,
-    modifier: Modifier = Modifier,
     onAddClick: () -> Unit
 ) {
-    Card(modifier = modifier) {
+    Card(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -469,10 +621,23 @@ private fun RecipeSearchResult(
             Box(
                 modifier = Modifier
                     .size(88.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!result.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(result.imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "${result.title} image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
             Text(
-                text = title,
+                text = result.title,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 3,

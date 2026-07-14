@@ -106,7 +106,7 @@ internal fun mealDbSearchQueries(title: String): List<String> {
 
     val withoutQualifier = cleanTitle
         .replace(
-            Regex("""\s*[\[(][^\])]+[\])]\s*$"""),
+            Regex("""\s*(?:\([^)]*\)|\[[^]]*])\s*$"""),
             ""
         )
         .trim()
