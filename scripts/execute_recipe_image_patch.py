@@ -20,6 +20,10 @@ end_index = next(
     if workflow[index].startswith("      - name:")
 )
 script = textwrap.dedent("\n".join(workflow[run_index + 1:end_index]))
+script = script.replace(
+    "updated, count = re.subn(pattern, replacement, text, count=1, flags=re.DOTALL)",
+    "updated, count = re.subn(pattern, lambda _: replacement, text, count=1, flags=re.DOTALL)"
+)
 
 section_replacement = '''section_pattern = re.compile(
     r'(?P<indent>[ \\t]+)onRecipeClick = onRecipeClick,\\n'
