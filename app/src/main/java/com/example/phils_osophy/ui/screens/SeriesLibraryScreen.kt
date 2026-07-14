@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -92,6 +94,9 @@ fun SeriesLibraryScreen(
     var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingSeries by remember { mutableStateOf<SeriesDto?>(null) }
+    val expandedSeriesSections = remember {
+        mutableStateMapOf<String, Boolean>()
+    }
     val applicationContext = LocalContext.current.applicationContext
     val completionTracker = remember(applicationContext) {
         SeriesCompletionTracker(applicationContext)
@@ -249,41 +254,52 @@ fun SeriesLibraryScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                item {
-                    LibrarySection(
-                        title = "En cours",
-                        series = filtered(inProgressSeries),
-                        onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    LibrarySection(
-                        title = "Séries terminées",
-                        series = filtered(finishedSeries),
-                        onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    LibrarySection(
-                        title = "Séries à regarder",
-                        series = filtered(toWatchSeries),
-                        onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    LibrarySection(
-                        title = "Séries arrêtées",
-                        series = filtered(stoppedSeries),
-                        onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
+                librarySectionItems(
+                    title = "En cours",
+                    series = filtered(inProgressSeries),
+                    isExpanded = expandedSeriesSections["En cours"] == true,
+                    onToggleExpanded = {
+                        expandedSeriesSections["En cours"] =
+                            expandedSeriesSections["En cours"] != true
+                    },
+                    onSeriesClick = onSeriesClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                librarySectionItems(
+                    title = "Séries terminées",
+                    series = filtered(finishedSeries),
+                    isExpanded = expandedSeriesSections["Séries terminées"] == true,
+                    onToggleExpanded = {
+                        expandedSeriesSections["Séries terminées"] =
+                            expandedSeriesSections["Séries terminées"] != true
+                    },
+                    onSeriesClick = onSeriesClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                librarySectionItems(
+                    title = "Séries à regarder",
+                    series = filtered(toWatchSeries),
+                    isExpanded = expandedSeriesSections["Séries à regarder"] == true,
+                    onToggleExpanded = {
+                        expandedSeriesSections["Séries à regarder"] =
+                            expandedSeriesSections["Séries à regarder"] != true
+                    },
+                    onSeriesClick = onSeriesClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                librarySectionItems(
+                    title = "Séries arrêtées",
+                    series = filtered(stoppedSeries),
+                    isExpanded = expandedSeriesSections["Séries arrêtées"] == true,
+                    onToggleExpanded = {
+                        expandedSeriesSections["Séries arrêtées"] =
+                            expandedSeriesSections["Séries arrêtées"] != true
+                    },
+                    onSeriesClick = onSeriesClick,
+                    onFavoriteClick = onFavoriteClick
+                )
             }
         } else {
             Box(
@@ -352,27 +368,27 @@ fun SeriesLibraryScreen(
 
 }
 
-@Composable
-private fun LibrarySection(
+private fun LazyListScope.librarySectionItems(
     title: String,
     series: List<SavedSeriesEntity>,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onSeriesClick: (Int) -> Unit,
     onFavoriteClick: (
         seriesId: Int,
         isFavorite: Boolean
     ) -> Unit
 ) {
-    var showFullList by remember(title) {
-        mutableStateOf(false)
-    }
+    val sectionKey = "series-section-$title"
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    item(
+        key = "$sectionKey-header",
+        contentType = "library-section-header"
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    showFullList = !showFullList
-                }
+                .clickable(onClick = onToggleExpanded)
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -383,78 +399,111 @@ private fun LibrarySection(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = if (showFullList) "⌃" else "⌄",
+                text = if (isExpanded) "⌃" else "⌄",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
 
+    item(
+        key = "$sectionKey-top-gap",
+        contentType = "library-section-gap"
+    ) {
         Spacer(modifier = Modifier.height(10.dp))
+    }
 
-        if (series.isEmpty()) {
-            Text(
-                text = "No series in this category.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            return
+    when {
+        series.isEmpty() -> {
+            item(
+                key = "$sectionKey-empty",
+                contentType = "library-section-empty"
+            ) {
+                Text(
+                    text = "No series in this category.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        if (showFullList) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                series.chunked(3).forEach { rowSeries ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        rowSeries.forEach { savedSeries ->
-                            LibrarySeriesPoster(
-                                series = savedSeries,
-                                onClick = {
-                                    onSeriesClick(savedSeries.id)
-                                },
-                                onFavoriteClick = {
-                                    onFavoriteClick(
-                                        savedSeries.id,
-                                        !savedSeries.isFavorite
-                                    )
-                                }
-                            )
-                        }
+        isExpanded -> {
+            val rowCount = (series.size + 2) / 3
+            items(
+                count = rowCount,
+                key = { rowIndex ->
+                    "$sectionKey-row-${series[rowIndex * 3].id}"
+                },
+                contentType = { "series-grid-row" }
+            ) { rowIndex ->
+                val startIndex = rowIndex * 3
+                val endIndex = minOf(startIndex + 3, series.size)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    for (seriesIndex in startIndex until endIndex) {
+                        val savedSeries = series[seriesIndex]
+                        LibrarySeriesPoster(
+                            series = savedSeries,
+                            onClick = {
+                                onSeriesClick(savedSeries.id)
+                            },
+                            onFavoriteClick = {
+                                onFavoriteClick(
+                                    savedSeries.id,
+                                    !savedSeries.isFavorite
+                                )
+                            }
+                        )
                     }
                 }
             }
-        } else {
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                contentPadding = PaddingValues(end = 4.dp)
+        }
+
+        else -> {
+            item(
+                key = "$sectionKey-preview",
+                contentType = "series-horizontal-preview"
             ) {
-                items(
-                    items = series,
-                    key = { savedSeries -> savedSeries.id }
-                ) { savedSeries ->
-                    LibrarySeriesPoster(
-                        series = savedSeries,
-                        onClick = {
-                            onSeriesClick(savedSeries.id)
-                        },
-                        onFavoriteClick = {
-                            onFavoriteClick(
-                                savedSeries.id,
-                                !savedSeries.isFavorite
-                            )
-                        }
-                    )
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(end = 4.dp)
+                ) {
+                    items(
+                        items = series,
+                        key = { savedSeries -> savedSeries.id },
+                        contentType = { "series-card" }
+                    ) { savedSeries ->
+                        LibrarySeriesPoster(
+                            series = savedSeries,
+                            onClick = {
+                                onSeriesClick(savedSeries.id)
+                            },
+                            onFavoriteClick = {
+                                onFavoriteClick(
+                                    savedSeries.id,
+                                    !savedSeries.isFavorite
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
     }
-}
 
+    item(
+        key = "$sectionKey-bottom-gap",
+        contentType = "library-section-gap"
+    ) {
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
 @Composable
 private fun LibrarySeriesPoster(
     series: SavedSeriesEntity,

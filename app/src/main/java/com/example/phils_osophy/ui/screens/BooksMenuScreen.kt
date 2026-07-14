@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -255,6 +257,9 @@ private fun BookLibraryScreen(
     var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingBook by remember { mutableStateOf<BookDto?>(null) }
+    val expandedBookSections = remember {
+        mutableStateMapOf<String, Boolean>()
+    }
     val coroutineScope = rememberCoroutineScope()
     val searchBarScrollConnection = remember {
         object : NestedScrollConnection {
@@ -399,41 +404,52 @@ private fun BookLibraryScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(20.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
-                item {
-                    BookShelf(
-                        title = "En cours",
-                        books = filtered(inProgressBooks),
-                        onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    BookShelf(
-                        title = "Livres terminés",
-                        books = filtered(finishedBooks),
-                        onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    BookShelf(
-                        title = "Livres à lire",
-                        books = filtered(toReadBooks),
-                        onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
-                item {
-                    BookShelf(
-                        title = "Livres abandonnés",
-                        books = filtered(abandonedBooks),
-                        onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick
-                    )
-                }
+                bookShelfItems(
+                    title = "En cours",
+                    books = filtered(inProgressBooks),
+                    isExpanded = expandedBookSections["En cours"] == true,
+                    onToggleExpanded = {
+                        expandedBookSections["En cours"] =
+                            expandedBookSections["En cours"] != true
+                    },
+                    onBookClick = onBookClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                bookShelfItems(
+                    title = "Livres terminés",
+                    books = filtered(finishedBooks),
+                    isExpanded = expandedBookSections["Livres terminés"] == true,
+                    onToggleExpanded = {
+                        expandedBookSections["Livres terminés"] =
+                            expandedBookSections["Livres terminés"] != true
+                    },
+                    onBookClick = onBookClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                bookShelfItems(
+                    title = "Livres à lire",
+                    books = filtered(toReadBooks),
+                    isExpanded = expandedBookSections["Livres à lire"] == true,
+                    onToggleExpanded = {
+                        expandedBookSections["Livres à lire"] =
+                            expandedBookSections["Livres à lire"] != true
+                    },
+                    onBookClick = onBookClick,
+                    onFavoriteClick = onFavoriteClick
+                )
+                bookShelfItems(
+                    title = "Livres abandonnés",
+                    books = filtered(abandonedBooks),
+                    isExpanded = expandedBookSections["Livres abandonnés"] == true,
+                    onToggleExpanded = {
+                        expandedBookSections["Livres abandonnés"] =
+                            expandedBookSections["Livres abandonnés"] != true
+                    },
+                    onBookClick = onBookClick,
+                    onFavoriteClick = onFavoriteClick
+                )
             }
         } else {
             Box(
@@ -495,24 +511,24 @@ private fun BookLibraryScreen(
 
 }
 
-@Composable
-private fun BookShelf(
+private fun LazyListScope.bookShelfItems(
     title: String,
     books: List<SavedBookEntity>,
+    isExpanded: Boolean,
+    onToggleExpanded: () -> Unit,
     onBookClick: (String) -> Unit,
     onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit
 ) {
-    var isExpanded by remember(title) {
-        mutableStateOf(true)
-    }
+    val sectionKey = "book-section-$title"
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    item(
+        key = "$sectionKey-header",
+        contentType = "library-section-header"
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
-                    isExpanded = !isExpanded
-                }
+                .clickable(onClick = onToggleExpanded)
                 .padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -523,46 +539,111 @@ private fun BookShelf(
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = if (isExpanded) "⌄" else "›",
+                text = if (isExpanded) "⌃" else "⌄",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
 
-        AnimatedVisibility(visible = isExpanded) {
-            Column {
-                Spacer(modifier = Modifier.height(10.dp))
-                if (books.isEmpty()) {
-                    Text("No books in this category.")
-                } else {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        contentPadding = PaddingValues(end = 4.dp)
-                    ) {
-                        items(
-                            items = books,
-                            key = { book -> book.key }
-                        ) { book ->
-                            SavedBookCard(
-                                book = book,
-                                onBookClick = {
-                                    onBookClick(book.key)
-                                },
-                                onFavoriteClick = {
-                                    onFavoriteClick(
-                                        book.key,
-                                        !book.isFavorite
-                                    )
-                                }
-                            )
-                        }
+    item(
+        key = "$sectionKey-top-gap",
+        contentType = "library-section-gap"
+    ) {
+        Spacer(modifier = Modifier.height(10.dp))
+    }
+
+    when {
+        books.isEmpty() -> {
+            item(
+                key = "$sectionKey-empty",
+                contentType = "library-section-empty"
+            ) {
+                Text(
+                    text = "No books in this category.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        isExpanded -> {
+            val rowCount = (books.size + 2) / 3
+            items(
+                count = rowCount,
+                key = { rowIndex ->
+                    "$sectionKey-row-${books[rowIndex * 3].key}"
+                },
+                contentType = { "book-grid-row" }
+            ) { rowIndex ->
+                val startIndex = rowIndex * 3
+                val endIndex = minOf(startIndex + 3, books.size)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    for (bookIndex in startIndex until endIndex) {
+                        val book = books[bookIndex]
+                        SavedBookCard(
+                            book = book,
+                            onBookClick = {
+                                onBookClick(book.key)
+                            },
+                            onFavoriteClick = {
+                                onFavoriteClick(
+                                    book.key,
+                                    !book.isFavorite
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        else -> {
+            item(
+                key = "$sectionKey-preview",
+                contentType = "book-horizontal-preview"
+            ) {
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    contentPadding = PaddingValues(end = 4.dp)
+                ) {
+                    items(
+                        items = books,
+                        key = { book -> book.key },
+                        contentType = { "book-card" }
+                    ) { book ->
+                        SavedBookCard(
+                            book = book,
+                            onBookClick = {
+                                onBookClick(book.key)
+                            },
+                            onFavoriteClick = {
+                                onFavoriteClick(
+                                    book.key,
+                                    !book.isFavorite
+                                )
+                            }
+                        )
                     }
                 }
             }
         }
     }
-}
 
+    item(
+        key = "$sectionKey-bottom-gap",
+        contentType = "library-section-gap"
+    ) {
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
 @Composable
 private fun SavedBookCard(
     book: SavedBookEntity,
