@@ -1,0 +1,99 @@
+name: Apply GDPR movie lookup fix
+
+on:
+  push:
+    branches: [agent/fix-gdpr-movie-lookups]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message != 'Fix GDPR movie lookup throttling'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/fix-gdpr-movie-lookups
+          fetch-depth: 0
+      - name: Patch importer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('app/src/main/java/com/example/phils_osophy/data/importer/ParallelTvTimeGdprImporter.kt')
+          text = path.read_text()
+          text = text.replace('import kotlinx.coroutines.coroutineScope\n', 'import kotlinx.coroutines.coroutineScope\nimport kotlinx.coroutines.delay\n')
+          text = text.replace('private const val MAX_CONCURRENT_TMDB_LOOKUPS = 4\n', 'private const val MAX_CONCURRENT_TMDB_LOOKUPS = 4\nprivate const val TMDB_LOOKUP_ATTEMPTS = 5\nprivate const val TMDB_RETRY_BASE_DELAY_MILLIS = 1_000L\n')
+          old_series = '''private suspend fun findParallelSeries(title: String): SeriesDto? {
+    val results = try {
+        TmdbClient.api.searchSeries(query = title).results
+    } catch (exception: Exception) {
+        if (exception is CancellationException) throw exception
+        Log.e(IMPORT_LOG_TAG, "Series lookup failed: $title", exception)
+        emptyList()
+    }
+    val requested = normalizedParallelTitle(title)
+    return results.firstOrNull { normalizedParallelTitle(it.name) == requested }
+        ?: results.firstOrNull()
+}
+'''
+          new_series = '''private suspend fun findParallelSeries(title: String): SeriesDto? {
+    val results = retryTmdbLookup("Series", title) {
+        TmdbClient.api.searchSeries(query = title).results
+    } ?: return null
+    val requested = normalizedParallelTitle(title)
+    return results.firstOrNull { normalizedParallelTitle(it.name) == requested }
+        ?: results.firstOrNull()
+}
+'''
+          old_movie = '''private suspend fun findParallelMovie(title: String): MovieDto? {
+    val results = try {
+        TmdbClient.api.searchMovies(query = title).results
+    } catch (exception: Exception) {
+        if (exception is CancellationException) throw exception
+        Log.e(IMPORT_LOG_TAG, "Movie lookup failed: $title", exception)
+        emptyList()
+    }
+    val requested = normalizedParallelTitle(title)
+    return results.firstOrNull { normalizedParallelTitle(it.title) == requested }
+        ?: results.firstOrNull()
+}
+'''
+          new_movie = '''private suspend fun findParallelMovie(title: String): MovieDto? {
+    val results = retryTmdbLookup("Movie", title) {
+        TmdbClient.api.searchMovies(query = title).results
+    } ?: return null
+    return results.firstOrNull()
+}
+
+private suspend fun <T> retryTmdbLookup(
+    mediaType: String,
+    title: String,
+    request: suspend () -> T
+): T? {
+    repeat(TMDB_LOOKUP_ATTEMPTS) { attempt ->
+        try {
+            return request()
+        } catch (exception: Exception) {
+            if (exception is CancellationException) throw exception
+            if (attempt == TMDB_LOOKUP_ATTEMPTS - 1) {
+                Log.e(IMPORT_LOG_TAG, "$mediaType lookup failed after $TMDB_LOOKUP_ATTEMPTS attempts: $title", exception)
+                return null
+            }
+            val delayMillis = (TMDB_RETRY_BASE_DELAY_MILLIS shl attempt).coerceAtMost(8_000L)
+            Log.w(IMPORT_LOG_TAG, "$mediaType lookup attempt ${attempt + 1} failed for $title; retrying in ${delayMillis}ms", exception)
+            delay(delayMillis)
+        }
+    }
+    return null
+}
+'''
+          if old_series not in text or old_movie not in text:
+              raise SystemExit('Expected lookup functions were not found')
+          path.write_text(text.replace(old_series, new_series).replace(old_movie, new_movie))
+          PY
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/example/phils_osophy/data/importer/ParallelTvTimeGdprImporter.kt
+          git commit -m "Fix GDPR movie lookup throttling"
+          git push
