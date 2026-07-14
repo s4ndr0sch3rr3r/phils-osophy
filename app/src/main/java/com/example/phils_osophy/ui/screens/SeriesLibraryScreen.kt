@@ -23,18 +23,18 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +51,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -64,6 +63,7 @@ import com.example.phils_osophy.data.local.SeriesStatus
 import com.example.phils_osophy.data.remote.SeriesDto
 import com.example.phils_osophy.data.remote.TmdbClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private const val TMDB_LIBRARY_POSTER_BASE_URL =
@@ -170,10 +170,12 @@ fun SeriesLibraryScreen(
         }
     }
 
-    fun searchSeries() {
+    LaunchedEffect(query, showFavoritesOnly) {
         val submittedQuery = query.trim()
-        if (submittedQuery.isBlank() || isLoading) {
-            return
+
+        if (submittedQuery.isBlank()) {
+            resetSearch()
+            return@LaunchedEffect
         }
 
         hasSearched = true
@@ -181,23 +183,23 @@ fun SeriesLibraryScreen(
         remoteSearchResults = emptyList()
 
         if (showFavoritesOnly) {
-            return
+            isLoading = false
+            return@LaunchedEffect
         }
 
-        coroutineScope.launch {
-            isLoading = true
-            try {
-                val results = TmdbClient.api
-                    .searchSeries(submittedQuery)
-                    .results
-                if (query.trim() == submittedQuery) {
-                    remoteSearchResults = results
-                }
-            } catch (exception: Exception) {
-                remoteSearchResults = emptyList()
-                errorMessage = exception.localizedMessage
-                    ?: "Series search failed."
-            } finally {
+        isLoading = true
+        try {
+            remoteSearchResults = TmdbClient.api
+                .searchSeries(submittedQuery)
+                .results
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            remoteSearchResults = emptyList()
+            errorMessage = exception.localizedMessage
+                ?: "Series search failed."
+        } finally {
+            if (query.trim() == submittedQuery && !showFavoritesOnly) {
                 isLoading = false
             }
         }
@@ -243,44 +245,34 @@ fun SeriesLibraryScreen(
 
         AnimatedVisibility(visible = isSearchBarVisible) {
             Column {
-                Row(
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { newQuery ->
+                        query = newQuery
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { newQuery ->
-                            query = newQuery
-                            if (newQuery.isBlank()) {
-                                resetSearch()
+                    label = {
+                        Text(
+                            if (showFavoritesOnly) {
+                                "Search within favorites"
+                            } else {
+                                "Search for a series"
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = {
-                            Text(
-                                if (showFavoritesOnly) {
-                                    "Search within favorites"
-                                } else {
-                                    "Search for a series"
-                                }
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onSearch = { searchSeries() }
                         )
-                    )
-                    Button(
-                        onClick = { searchSeries() },
-                        enabled = query.isNotBlank() && !isLoading
-                    ) {
-                        Text("Search")
-                    }
-                }
+                    },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Text(
+                                    text = "×",
+                                    color = LibraryFavoriteColor,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true
+                )
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
