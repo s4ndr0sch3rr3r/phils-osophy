@@ -1,16 +1,16 @@
 name: Apply continuous library search
 
 on:
-  push:
+  pull_request:
+    types: [opened, reopened, synchronize]
     branches: [main]
-    paths:
-      - .github/workflows/apply-continuous-library-search.yml
 
 permissions:
   contents: write
 
 jobs:
   patch-build-and-commit:
+    if: github.event.pull_request.head.ref == 'agent/continuous-library-search-clear'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
