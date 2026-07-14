@@ -1,0 +1,30 @@
+name: Apply unified favorite icons
+
+on:
+  push:
+    branches:
+      - agent/unified-favorite-icons
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/unified-favorite-icons
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply favorite icon update
+        run: python .github/scripts/apply_unified_favorite_icons.py
+      - name: Commit generated source changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java
+          git commit -m "Use matched favorite icons across the app"
+          git push origin HEAD:agent/unified-favorite-icons
