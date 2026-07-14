@@ -12,5 +12,6 @@ enum class AppScreen {
     Explore,
     Profile,
     GamesMenu,
-    BooksMenu
+    BooksMenu,
+    RecipesMenu
 }

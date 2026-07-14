@@ -31,11 +31,11 @@ private val InactiveTextColor = Color(0xFF8A8A8A)
 private val menuItems = BottomCategory.values().toList()
 
 enum class BottomCategory(val label: String) {
-    Movies("Movies"),
     Series("Series"),
-    Games("Games"),
+    Movies("Movies"),
     Books("Books"),
-    Explore("Explore")
+    Recipes("Recipes"),
+    Games("Games")
 }
 
 @Composable
