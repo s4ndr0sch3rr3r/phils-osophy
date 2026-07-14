@@ -41,7 +41,7 @@ if section_count != 4:
 '''
 script, count = re.subn(
     r'''old_section_call = \(.*?recipe = recipe\.replace\(old_section_call, new_section_call\)\n''',
-    section_replacement,
+    lambda _: section_replacement,
     script,
     count=1,
     flags=re.DOTALL
@@ -67,7 +67,7 @@ if card_count != 2:
 '''
 script, count = re.subn(
     r'''card_call = \(.*?recipe = recipe\.replace\(card_call, card_call_updated\)\n''',
-    card_replacement,
+    lambda _: card_replacement,
     script,
     count=1,
     flags=re.DOTALL
