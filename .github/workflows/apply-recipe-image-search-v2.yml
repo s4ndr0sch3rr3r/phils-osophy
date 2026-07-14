@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  diagnose:
+  patch-build-commit:
     if: github.head_ref == 'agent/recipe-image-search'
     runs-on: ubuntu-latest
     steps:
@@ -18,18 +18,49 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Run patch executor
-        id: patch
-        continue-on-error: true
-        run: python scripts/execute_recipe_image_patch.py > recipe-image-final-error.txt 2>&1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
-      - name: Save traceback
+      - name: Apply Recipe image integration
+        run: python scripts/execute_recipe_image_patch.py
+
+      - name: Verify intended source diff
+        run: |
+          git diff --name-only > /tmp/changed-files.txt
+          cat /tmp/changed-files.txt
+          grep -Fx 'app/src/main/java/com/example/phils_osophy/ui/screens/RecipeLibraryScreen.kt' /tmp/changed-files.txt
+          grep -Fx 'app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt' /tmp/changed-files.txt
+          grep -q 'MealDbClient' app/src/main/java/com/example/phils_osophy/ui/screens/RecipeLibraryScreen.kt
+          grep -q 'MealDbClient' app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt
+          grep -q 'imageLookupSemaphore' app/src/main/java/com/example/phils_osophy/ui/screens/RecipeLibraryScreen.kt
+          grep -q 'CircularProgressIndicator' app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt
+
+      - name: Run unit tests and build debug APK
+        env:
+          TMDB_READ_TOKEN: test-token
+          RAWG_API_KEY: test-key
+          MEALDB_API_KEY: '1'
+        run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Commit source changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ "${{ steps.patch.outcome }}" = "success" ]; then
-            echo success > recipe-image-final-error.txt
-          fi
-          git add recipe-image-final-error.txt
-          git commit -m "Record final Recipe image executor result"
+          git add \
+            app/src/main/java/com/example/phils_osophy/data/remote/MealDbClient.kt \
+            app/src/main/java/com/example/phils_osophy/ui/screens/RecipeLibraryScreen.kt \
+            app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt
+          git commit -m "Integrate matched Recipe images"
+
+      - name: Remove validation files
+        run: |
+          rm -f .github/workflows/apply-recipe-image-search-v2.yml
+          rm -f scripts/execute_recipe_image_patch.py
+          rm -f recipe-image-validation-trigger.txt
+          rm -f recipe-image-isolated-error.txt
+          rm -f recipe-image-final-error.txt
+          git add -A
+          git commit -m "Remove Recipe image validation files"
           git push origin HEAD:${{ github.head_ref }}
