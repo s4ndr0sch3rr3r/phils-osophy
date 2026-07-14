@@ -42,14 +42,16 @@ fun AppScaffold(
         ) {
             content()
 
-            AlienProfileButton(
-                isSelected = isProfileSelected,
-                onClick = onProfileClick,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 20.dp, end = 16.dp)
-            )
+            if (!isProfileSelected) {
+                AlienProfileButton(
+                    isSelected = false,
+                    onClick = onProfileClick,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 20.dp, end = 16.dp)
+                )
+            }
         }
     }
 }
