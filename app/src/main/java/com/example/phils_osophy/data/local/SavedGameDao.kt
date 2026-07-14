@@ -22,4 +22,9 @@ interface SavedGameDao {
         "UPDATE saved_games SET userRating = :userRating WHERE id = :gameId"
     )
     suspend fun updateRating(gameId: Long, userRating: Int)
+
+    @Query(
+        "UPDATE saved_games SET isFavorite = :isFavorite WHERE id = :gameId"
+    )
+    suspend fun updateFavorite(gameId: Long, isFavorite: Boolean)
 }

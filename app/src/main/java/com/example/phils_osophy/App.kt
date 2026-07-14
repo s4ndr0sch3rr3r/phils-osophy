@@ -576,6 +576,14 @@ fun App() {
                             )
                         }
                     },
+                    onFavoriteClick = { gameId, isFavorite ->
+                        coroutineScope.launch {
+                            savedGameDao.updateFavorite(
+                                gameId = gameId,
+                                isFavorite = isFavorite
+                            )
+                        }
+                    },
                     onBackClick = ::openMovies
                 )
             }
