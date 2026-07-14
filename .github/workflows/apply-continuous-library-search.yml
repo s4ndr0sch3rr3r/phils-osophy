@@ -2,7 +2,7 @@ name: Apply continuous library search
 
 on:
   pull_request:
-    types: [opened]
+    types: [reopened]
     branches: [main]
 
 permissions:
@@ -38,10 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            app/src/main/java/com/example/phils_osophy/ui/screens/MovieSearchScreen.kt \
-            app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt \
-            app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt \
-            .github/scripts/apply-continuous-search.py
+          git add -A
+          git status --short
           git commit -m "Make library searches continuous"
-          git push origin HEAD:agent/continuous-library-search-clear
+          git push origin HEAD:refs/heads/agent/continuous-library-search-clear
