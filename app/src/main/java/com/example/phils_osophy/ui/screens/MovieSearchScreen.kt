@@ -168,7 +168,7 @@ fun MovieSearchScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Movies",
+                text = "Movies (${savedMovies.size})",
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
