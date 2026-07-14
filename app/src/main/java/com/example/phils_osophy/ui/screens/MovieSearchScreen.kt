@@ -2,6 +2,7 @@ package com.example.phils_osophy.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,14 +42,15 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.phils_osophy.data.local.SavedMovieEntity
+import com.example.phils_osophy.data.local.toMovieDto
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.data.remote.TmdbClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
@@ -69,7 +71,7 @@ fun MovieSearchScreen(
     onBackClick: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
-    var movies by remember {
+    var remoteMovies by remember {
         mutableStateOf<List<MovieDto>>(emptyList())
     }
     var isLoading by remember { mutableStateOf(false) }
@@ -80,6 +82,7 @@ fun MovieSearchScreen(
         mutableStateOf<String?>(null)
     }
 
+    val cleanQuery = query.trim()
     val savedMovieIds = remember(savedMovies) {
         savedMovies.map { movie -> movie.id }.toSet()
     }
@@ -90,7 +93,7 @@ fun MovieSearchScreen(
         showFavoritesOnly && hasSearched -> {
             favoriteMovies.filter { movie ->
                 movie.title.contains(
-                    other = query.trim(),
+                    other = cleanQuery,
                     ignoreCase = true
                 )
             }
@@ -98,6 +101,19 @@ fun MovieSearchScreen(
 
         showFavoritesOnly -> favoriteMovies
         else -> savedMovies
+    }
+    val localMovieResults = if (hasSearched && !showFavoritesOnly) {
+        savedMovies.filter { movie ->
+            movie.title.contains(
+                other = cleanQuery,
+                ignoreCase = true
+            )
+        }
+    } else {
+        emptyList()
+    }
+    val visibleRemoteMovies = remoteMovies.filterNot { movie ->
+        movie.id in savedMovieIds
     }
 
     val coroutineScope = rememberCoroutineScope()
@@ -118,30 +134,32 @@ fun MovieSearchScreen(
 
     val resetSearch = {
         hasSearched = false
-        movies = emptyList()
+        remoteMovies = emptyList()
         errorMessage = null
         isLoading = false
     }
 
     val searchMovies = {
-        val cleanQuery = query.trim()
+        val submittedQuery = query.trim()
 
-        if (cleanQuery.isNotEmpty() && !isLoading) {
+        if (submittedQuery.isNotEmpty() && !isLoading) {
             errorMessage = null
             hasSearched = true
+            remoteMovies = emptyList()
 
-            if (showFavoritesOnly) {
-                movies = emptyList()
-            } else {
+            if (!showFavoritesOnly) {
                 coroutineScope.launch {
                     isLoading = true
 
                     try {
-                        movies = TmdbClient.api
-                            .searchMovies(cleanQuery)
+                        val results = TmdbClient.api
+                            .searchMovies(submittedQuery)
                             .results
+                        if (query.trim() == submittedQuery) {
+                            remoteMovies = results
+                        }
                     } catch (exception: Exception) {
-                        movies = emptyList()
+                        remoteMovies = emptyList()
                         errorMessage =
                             exception.localizedMessage
                                 ?: "Movie search failed."
@@ -270,52 +288,75 @@ fun MovieSearchScreen(
                     .fillMaxWidth()
             )
         } else {
-            Box(
+            LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                when {
-                    isLoading -> {
+                if (localMovieResults.isNotEmpty()) {
+                    item(key = "local-movies-heading") {
+                        SearchSectionHeading("In your library")
+                    }
+                    items(
+                        items = localMovieResults,
+                        key = { movie -> "local-${movie.id}" }
+                    ) { movie ->
+                        MovieResultCard(
+                            movie = movie.toMovieDto(),
+                            onImageClick = {
+                                onMovieClick(movie.id)
+                            }
+                        )
+                    }
+                }
+
+                item(key = "tmdb-movies-heading") {
+                    SearchSectionHeading("TMDB results")
+                }
+
+                if (isLoading) {
+                    item(key = "tmdb-movies-loading") {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             CircularProgressIndicator()
                         }
                     }
+                }
 
-                    errorMessage != null -> {
+                errorMessage?.let { message ->
+                    item(key = "tmdb-movies-error") {
                         Text(
-                            text = errorMessage.orEmpty(),
+                            text = message,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
+                }
 
-                    movies.isEmpty() -> {
-                        Text("No movies found.")
-                    }
-
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement =
-                                Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(
-                                items = movies,
-                                key = { movie -> movie.id }
-                            ) { movie ->
-                                MovieResultCard(
-                                    movie = movie,
-                                    isAdded =
-                                        movie.id in savedMovieIds,
-                                    onAddClick = {
-                                        onAddMovie(movie)
-                                    }
-                                )
-                            }
+                items(
+                    items = visibleRemoteMovies,
+                    key = { movie -> "remote-${movie.id}" }
+                ) { movie ->
+                    MovieResultCard(
+                        movie = movie,
+                        onAddClick = {
+                            onAddMovie(movie)
                         }
+                    )
+                }
+
+                if (
+                    !isLoading &&
+                    errorMessage == null &&
+                    localMovieResults.isEmpty() &&
+                    visibleRemoteMovies.isEmpty()
+                ) {
+                    item(key = "movies-empty") {
+                        Text("No movies found.")
                     }
                 }
             }
@@ -324,10 +365,19 @@ fun MovieSearchScreen(
 }
 
 @Composable
+private fun SearchSectionHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
 private fun MovieResultCard(
     movie: MovieDto,
-    isAdded: Boolean,
-    onAddClick: () -> Unit
+    onImageClick: (() -> Unit)? = null,
+    onAddClick: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
@@ -337,10 +387,18 @@ private fun MovieResultCard(
         ) {
             MoviePoster(
                 movie = movie,
-                modifier = Modifier.size(
-                    width = 96.dp,
-                    height = 144.dp
-                )
+                modifier = Modifier
+                    .size(
+                        width = 96.dp,
+                        height = 144.dp
+                    )
+                    .then(
+                        if (onImageClick != null) {
+                            Modifier.clickable(onClick = onImageClick)
+                        } else {
+                            Modifier
+                        }
+                    )
             )
 
             Spacer(modifier = Modifier.width(12.dp))
@@ -382,19 +440,12 @@ private fun MovieResultCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                onAddClick?.let { addClick ->
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Button(
-                    onClick = onAddClick,
-                    enabled = !isAdded
-                ) {
-                    Text(
-                        if (isAdded) {
-                            "Added"
-                        } else {
-                            "+ Add"
-                        }
-                    )
+                    Button(onClick = addClick) {
+                        Text("+ Add")
+                    }
                 }
             }
         }

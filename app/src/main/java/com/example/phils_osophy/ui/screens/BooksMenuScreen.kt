@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -58,7 +57,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -248,7 +246,7 @@ private fun BookLibraryScreen(
     BackHandler(onBack = onBackClick)
 
     var query by remember { mutableStateOf("") }
-    var searchResults by remember {
+    var remoteSearchResults by remember {
         mutableStateOf<List<BookDto>>(emptyList())
     }
     var isLoading by remember { mutableStateOf(false) }
@@ -291,10 +289,25 @@ private fun BookLibraryScreen(
     val savedBookKeys = remember(allSavedBooks) {
         allSavedBooks.map { book -> book.key }.toSet()
     }
+    val cleanQuery = query.trim()
+    val localSearchResults = if (hasSearched) {
+        allSavedBooks.filter { book ->
+            (!showFavoritesOnly || book.isFavorite) &&
+                (
+                    book.title.contains(cleanQuery, ignoreCase = true) ||
+                        book.authors.contains(cleanQuery, ignoreCase = true)
+                    )
+        }
+    } else {
+        emptyList()
+    }
+    val visibleRemoteResults = remoteSearchResults.filterNot { book ->
+        book.key in savedBookKeys
+    }
 
     fun resetSearch() {
         hasSearched = false
-        searchResults = emptyList()
+        remoteSearchResults = emptyList()
         errorMessage = null
         isLoading = false
     }
@@ -305,25 +318,34 @@ private fun BookLibraryScreen(
         }
 
     fun searchBooks() {
-        val cleanQuery = query.trim()
-        if (cleanQuery.isBlank() || isLoading) {
+        val submittedQuery = query.trim()
+        if (submittedQuery.isBlank() || isLoading) {
             return
         }
 
         hasSearched = true
         errorMessage = null
+        remoteSearchResults = emptyList()
+
+        if (showFavoritesOnly) {
+            return
+        }
+
         coroutineScope.launch {
             isLoading = true
             try {
-                searchResults = OpenLibraryClient.api
-                    .searchBooks(cleanQuery)
+                val results = OpenLibraryClient.api
+                    .searchBooks(submittedQuery)
                     .docs
                     .filter { book ->
                         book.key.isNotBlank() && book.title.isNotBlank()
                     }
                     .distinctBy { book -> book.key }
+                if (query.trim() == submittedQuery) {
+                    remoteSearchResults = results
+                }
             } catch (exception: Exception) {
-                searchResults = emptyList()
+                remoteSearchResults = emptyList()
                 errorMessage = exception.localizedMessage
                     ?: "Book search failed."
             } finally {
@@ -386,7 +408,15 @@ private fun BookLibraryScreen(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = { Text("Search for a book") },
+                        label = {
+                            Text(
+                                if (showFavoritesOnly) {
+                                    "Search within favorites"
+                                } else {
+                                    "Search for a book"
+                                }
+                            )
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Search
@@ -459,44 +489,83 @@ private fun BookLibraryScreen(
                 )
             }
         } else {
-            Box(
+            LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                when {
-                    isLoading -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center)
+                if (localSearchResults.isNotEmpty()) {
+                    item(key = "local-books-heading") {
+                        BookSearchHeading("In your library")
+                    }
+                    items(
+                        items = localSearchResults,
+                        key = { book -> "local-${book.key}" }
+                    ) { book ->
+                        BookSearchResult(
+                            title = book.title,
+                            authors = book.authors,
+                            firstPublishYear = book.firstPublishYear,
+                            coverId = book.coverId,
+                            onImageClick = {
+                                onBookClick(book.key)
+                            }
                         )
                     }
-                    errorMessage != null -> {
-                        Text(
-                            text = errorMessage.orEmpty(),
-                            color = MaterialTheme.colorScheme.error
-                        )
+                }
+
+                if (!showFavoritesOnly) {
+                    item(key = "open-library-books-heading") {
+                        BookSearchHeading("Open Library results")
                     }
-                    searchResults.isEmpty() -> {
-                        Text("No books found.")
-                    }
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(
-                                items = searchResults,
-                                key = { book -> book.key }
-                            ) { book ->
-                                BookSearchResult(
-                                    book = book,
-                                    isAdded = book.key in savedBookKeys,
-                                    onAddClick = {
-                                        pendingBook = book
-                                    }
-                                )
+
+                    if (isLoading) {
+                        item(key = "open-library-books-loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
                             }
                         }
+                    }
+
+                    errorMessage?.let { message ->
+                        item(key = "open-library-books-error") {
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    items(
+                        items = visibleRemoteResults,
+                        key = { book -> "remote-${book.key}" }
+                    ) { book ->
+                        BookSearchResult(
+                            title = book.title,
+                            authors = book.authorNames.joinToString(", "),
+                            firstPublishYear = book.firstPublishYear,
+                            coverId = book.coverId,
+                            onAddClick = {
+                                pendingBook = book
+                            }
+                        )
+                    }
+                }
+
+                if (
+                    !isLoading &&
+                    errorMessage == null &&
+                    localSearchResults.isEmpty() &&
+                    visibleRemoteResults.isEmpty()
+                ) {
+                    item(key = "books-empty") {
+                        Text("No books found.")
                     }
                 }
             }
@@ -515,7 +584,6 @@ private fun BookLibraryScreen(
             }
         )
     }
-
 }
 
 private fun LazyListScope.bookShelfItems(
@@ -651,6 +719,7 @@ private fun LazyListScope.bookShelfItems(
         Spacer(modifier = Modifier.height(20.dp))
     }
 }
+
 @Composable
 private fun SavedBookCard(
     book: SavedBookEntity,
@@ -694,48 +763,67 @@ private fun SavedBookCard(
 }
 
 @Composable
+private fun BookSearchHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
 private fun BookSearchResult(
-    book: BookDto,
-    isAdded: Boolean,
-    onAddClick: () -> Unit
+    title: String,
+    authors: String,
+    firstPublishYear: Int?,
+    coverId: Int?,
+    onImageClick: (() -> Unit)? = null,
+    onAddClick: (() -> Unit)? = null
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(12.dp)) {
             BookCover(
-                coverId = book.coverId,
-                title = book.title,
-                modifier = Modifier.size(width = 88.dp, height = 132.dp)
+                coverId = coverId,
+                title = title,
+                modifier = Modifier
+                    .size(width = 88.dp, height = 132.dp)
+                    .then(
+                        if (onImageClick != null) {
+                            Modifier.clickable(onClick = onImageClick)
+                        } else {
+                            Modifier
+                        }
+                    )
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = book.title,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (book.authorNames.isNotEmpty()) {
+                if (authors.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = book.authorNames.joinToString(", "),
+                        text = authors,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                book.firstPublishYear?.let { year ->
+                firstPublishYear?.let { year ->
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "First published: $year",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onAddClick,
-                    enabled = !isAdded
-                ) {
-                    Text(if (isAdded) "Added" else "+ Add")
+                onAddClick?.let { addClick ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = addClick) {
+                        Text("+ Add")
+                    }
                 }
             }
         }
