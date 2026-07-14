@@ -14,7 +14,17 @@ data class SavedRecipeEntity(
     @ColumnInfo(defaultValue = "0")
     val isFavorite: Boolean = false,
     @ColumnInfo(defaultValue = "0")
-    val addedAtEpochMillis: Long = System.currentTimeMillis()
+    val addedAtEpochMillis: Long = System.currentTimeMillis(),
+    @ColumnInfo(defaultValue = "''")
+    val difficulty: String = "",
+    @ColumnInfo(defaultValue = "0")
+    val prepTimeMinutes: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val totalTimeMinutes: Int = 0,
+    @ColumnInfo(defaultValue = "''")
+    val ingredients: String = "",
+    @ColumnInfo(defaultValue = "''")
+    val cookingSteps: String = ""
 )
 
 enum class RecipeStatus {
