@@ -4,7 +4,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -15,11 +18,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @Composable
 fun MediaCommentDialog(
@@ -77,10 +85,19 @@ fun EditableMediaCommentSection(
     var comment by remember(mediaKey, savedComment) {
         mutableStateOf(savedComment)
     }
+    val saveButtonBringIntoViewRequester = remember {
+        BringIntoViewRequester()
+    }
+    val coroutineScope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
 
-    Column(modifier = modifier.padding(contentPadding)) {
+    Column(
+        modifier = modifier
+            .padding(contentPadding)
+            .imePadding()
+    ) {
         Text(
-            text = "Your comment",
+            text = "Mes impressions",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
@@ -90,8 +107,17 @@ fun EditableMediaCommentSection(
         OutlinedTextField(
             value = comment,
             onValueChange = { comment = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Comment") },
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focusState ->
+                    if (focusState.isFocused) {
+                        coroutineScope.launch {
+                            delay(300)
+                            saveButtonBringIntoViewRequester.bringIntoView()
+                        }
+                    }
+                },
+            placeholder = { Text("...") },
             minLines = 3,
             maxLines = 8
         )
@@ -102,11 +128,15 @@ fun EditableMediaCommentSection(
             onClick = {
                 val normalizedComment = comment.trim()
                 comment = normalizedComment
+                focusManager.clearFocus()
                 onSave(normalizedComment)
             },
+            modifier = Modifier.bringIntoViewRequester(
+                saveButtonBringIntoViewRequester
+            ),
             enabled = comment.trim() != savedComment
         ) {
-            Text("Save comment")
+            Text("Save")
         }
     }
 }
