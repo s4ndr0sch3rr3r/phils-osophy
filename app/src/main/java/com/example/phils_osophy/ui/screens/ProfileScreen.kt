@@ -50,12 +50,19 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 private val ProfileGreen = Color(0xFF64DD75)
 private const val FallbackEpisodeRuntimeMinutes = 45
+private const val ProfileStatisticsRequestParallelism = 8
 private const val MinutesPerHour = 60L
 private const val MinutesPerDay = 24L * MinutesPerHour
 private const val MinutesPerMonth = 30L * MinutesPerDay
@@ -88,6 +95,12 @@ fun ProfileScreen(
     var isRefreshingStatistics by remember { mutableStateOf(false) }
     var statisticsRefreshMessage by remember { mutableStateOf<String?>(null) }
     var statisticsRefreshToken by remember { mutableIntStateOf(0) }
+    val watchedSeriesCount = remember(series, watchedEpisodes) {
+        watchedEpisodeCountsByKnownSeries(
+            series = series,
+            watchedEpisodes = watchedEpisodes
+        ).size
+    }
 
     val backupPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -252,7 +265,8 @@ fun ProfileScreen(
             ProfileTimeCard(
                 title = "Series",
                 value = formatDuration(statistics.seriesMinutes),
-                detail = "${statistics.watchedEpisodeCount} watched episodes · " +
+                detail = "$watchedSeriesCount different shows · " +
+                    "${statistics.watchedEpisodeCount} watched episodes · " +
                     "estimated from TMDB runtimes"
             )
         }
@@ -473,48 +487,27 @@ private suspend fun calculateProfileTimeStats(
     watchedEpisodes: List<WatchedEpisodeEntity>,
     games: List<SavedGameEntity>,
     books: List<SavedBookEntity>
-): ProfileTimeStats = withContext(Dispatchers.IO) {
-    var movieMinutes = 0L
-    movies.forEach { movie ->
-        val runtime = try {
-            TmdbClient.api.getMovieDetails(movie.id).runtime ?: 0
-        } catch (exception: Exception) {
-            if (exception is kotlinx.coroutines.CancellationException) {
-                throw exception
+): ProfileTimeStats = coroutineScope {
+    val watchedBySeries = watchedEpisodeCountsByKnownSeries(
+        series = series,
+        watchedEpisodes = watchedEpisodes
+    )
+    val requestSemaphore = Semaphore(ProfileStatisticsRequestParallelism)
+
+    val movieRuntimeRequests = movies.map { movie ->
+        async(Dispatchers.IO) {
+            requestSemaphore.withPermit {
+                loadMovieRuntimeMinutes(movie.id)
             }
-            0
         }
-        movieMinutes += runtime.coerceAtLeast(0).toLong()
     }
-
-    val watchedBySeries = watchedEpisodes.groupingBy { episode ->
-        episode.seriesId
-    }.eachCount()
-    val knownSeriesIds = series.map { savedSeries -> savedSeries.id }.toSet()
-    var seriesMinutes = 0L
-
-    watchedBySeries.forEach { (seriesId, watchedCount) ->
-        if (seriesId !in knownSeriesIds) {
-            return@forEach
-        }
-
-        val averageRuntime = try {
-            val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
-                .episodeRunTime
-                .filter { runtime -> runtime > 0 }
-            if (runtimes.isEmpty()) {
-                FallbackEpisodeRuntimeMinutes
-            } else {
-                runtimes.average().roundToInt()
+    val seriesRuntimeRequests = watchedBySeries.map { (seriesId, watchedCount) ->
+        async(Dispatchers.IO) {
+            val averageRuntime = requestSemaphore.withPermit {
+                loadSeriesEpisodeRuntimeMinutes(seriesId)
             }
-        } catch (exception: Exception) {
-            if (exception is kotlinx.coroutines.CancellationException) {
-                throw exception
-            }
-            FallbackEpisodeRuntimeMinutes
+            watchedCount.toLong() * averageRuntime.toLong()
         }
-
-        seriesMinutes += watchedCount.toLong() * averageRuntime
     }
 
     val gameMinutes = games.sumOf { game ->
@@ -525,8 +518,8 @@ private suspend fun calculateProfileTimeStats(
     }
 
     ProfileTimeStats(
-        movieMinutes = movieMinutes,
-        seriesMinutes = seriesMinutes,
+        movieMinutes = movieRuntimeRequests.awaitAll().sum(),
+        seriesMinutes = seriesRuntimeRequests.awaitAll().sum(),
         gameMinutes = gameMinutes,
         movieCount = movies.size,
         watchedEpisodeCount = watchedEpisodes.size,
@@ -535,6 +528,47 @@ private suspend fun calculateProfileTimeStats(
         finishedBookCount = finishedBooks,
         calculatedAtEpochMillis = 0
     )
+}
+
+private fun watchedEpisodeCountsByKnownSeries(
+    series: List<SavedSeriesEntity>,
+    watchedEpisodes: List<WatchedEpisodeEntity>
+): Map<Int, Int> {
+    val knownSeriesIds = series.map { savedSeries -> savedSeries.id }.toSet()
+    return watchedEpisodes
+        .asSequence()
+        .filter { episode -> episode.seriesId in knownSeriesIds }
+        .groupingBy { episode -> episode.seriesId }
+        .eachCount()
+}
+
+private suspend fun loadMovieRuntimeMinutes(movieId: Int): Long = try {
+    TmdbClient.api.getMovieDetails(movieId)
+        .runtime
+        ?.coerceAtLeast(0)
+        ?.toLong()
+        ?: 0L
+} catch (exception: Exception) {
+    if (exception is CancellationException) {
+        throw exception
+    }
+    0L
+}
+
+private suspend fun loadSeriesEpisodeRuntimeMinutes(seriesId: Int): Int = try {
+    val runtimes = TmdbClient.api.getSeriesDetails(seriesId)
+        .episodeRunTime
+        .filter { runtime -> runtime > 0 }
+    if (runtimes.isEmpty()) {
+        FallbackEpisodeRuntimeMinutes
+    } else {
+        runtimes.average().roundToInt()
+    }
+} catch (exception: Exception) {
+    if (exception is CancellationException) {
+        throw exception
+    }
+    FallbackEpisodeRuntimeMinutes
 }
 
 private fun ProfileStatsCacheEntity.toProfileTimeStats(): ProfileTimeStats =
