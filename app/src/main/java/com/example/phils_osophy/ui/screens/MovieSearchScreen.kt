@@ -46,6 +46,7 @@ import coil3.request.crossfade
 import com.example.phils_osophy.data.local.SavedMovieEntity
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import kotlinx.coroutines.launch
 
 private const val TMDB_POSTER_BASE_URL =
@@ -158,14 +159,11 @@ fun MovieSearchScreen(
                     resetSearch()
                 }
             ) {
-                Text(
-                    text = if (showFavoritesOnly) "♥" else "♡",
-                    color = if (showFavoritesOnly) {
-                        FavoriteColor
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    fontSize = 30.sp
+                FavoriteIcon(
+                    isFavorite = showFavoritesOnly,
+                    size = 30.dp,
+                    activeColor = FavoriteColor,
+                    inactiveColor = MaterialTheme.colorScheme.onSurface
                 )
             }
         }

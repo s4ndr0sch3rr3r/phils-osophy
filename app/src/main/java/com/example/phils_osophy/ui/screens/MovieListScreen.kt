@@ -42,6 +42,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.phils_osophy.data.local.SavedMovieEntity
+import com.example.phils_osophy.ui.components.FavoriteIcon
 
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
@@ -210,15 +211,11 @@ private fun MoviePosterTile(
                         .clickable(onClick = onFavoriteClick),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = if (movie.isFavorite) "♥" else "♡",
-                        color = if (movie.isFavorite) {
-                            FavoriteColor
-                        } else {
-                            Color.White
-                        },
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold
+                    FavoriteIcon(
+                        isFavorite = movie.isFavorite,
+                        size = 26.dp,
+                        activeColor = FavoriteColor,
+                        inactiveColor = Color.White
                     )
                 }
 
