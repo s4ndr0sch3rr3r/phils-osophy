@@ -1,0 +1,9 @@
+state: 1
+search functions: 1
+search result block: 1
+card implementation: 1
+search card: 1
+detail state: 1
+detail hero: 1
+section call string: 0
+card call string: 0
