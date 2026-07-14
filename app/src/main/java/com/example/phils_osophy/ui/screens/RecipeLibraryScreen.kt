@@ -173,7 +173,7 @@ fun RecipeLibraryScreen(
 
     fun performSearch() {
         searchedQuery = query.trim()
-            .replace(Regex("\s+"), " ")
+            .replace(Regex("\\s+"), " ")
             .takeIf { title -> title.isNotBlank() }
     }
 
