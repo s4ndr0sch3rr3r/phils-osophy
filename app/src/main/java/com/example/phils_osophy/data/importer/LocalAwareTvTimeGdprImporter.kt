@@ -28,7 +28,7 @@ private val LocalRequiredHistoryFiles = listOf(
 
 private val LocalWatchedMovieActions = setOf("watch", "rewatch_count")
 private val LocalTrailingReleaseYearPattern =
-    Regex("""\s*(?:\(\d{4}\)|\[\d{4}])\s*$""")
+    Regex("""^(.*?)\s*(?:\((\d{4})\)|\[(\d{4})])\s*$""")
 
 object LocalAwareTvTimeGdprImporter {
 
@@ -36,22 +36,35 @@ object LocalAwareTvTimeGdprImporter {
         context: Context,
         uri: Uri
     ): TvTimeImportResult = withContext(Dispatchers.IO) {
-        val savedMovieKeys = PhilsOsophyDatabase.getInstance(context)
+        val savedMovies = PhilsOsophyDatabase.getInstance(context)
             .savedMovieDao()
             .getAll()
-            .asSequence()
-            .map { movie -> normalizedLocalMovieKey(movie.title) }
-            .filter { key -> key.isNotEmpty() }
-            .toSet()
+        val savedMovieKeys = savedMovies.map { movie ->
+            localMovieLookupKey(
+                title = movie.title,
+                releaseDate = movie.releaseDate
+            )
+        }
+        val savedMovieIndex = LocalSavedMovieIndex(
+            titles = savedMovieKeys
+                .asSequence()
+                .map { key -> key.title }
+                .filter { title -> title.isNotEmpty() }
+                .toSet(),
+            titleYears = savedMovieKeys
+                .asSequence()
+                .filter { key -> key.title.isNotEmpty() && key.releaseYear != null }
+                .toSet()
+        )
 
-        if (savedMovieKeys.isEmpty()) {
+        if (savedMovieIndex.titles.isEmpty()) {
             return@withContext ParallelTvTimeGdprImporter.importBackup(context, uri)
         }
 
         val filteredBackup = createLocalFilteredBackup(
             context = context,
             uri = uri,
-            savedMovieKeys = savedMovieKeys
+            savedMovieIndex = savedMovieIndex
         )
         if (filteredBackup.existingMovieCount == 0) {
             filteredBackup.file.delete()
@@ -73,6 +86,23 @@ object LocalAwareTvTimeGdprImporter {
     }
 }
 
+private data class LocalMovieLookupKey(
+    val title: String,
+    val releaseYear: Int?
+)
+
+private data class LocalSavedMovieIndex(
+    val titles: Set<String>,
+    val titleYears: Set<LocalMovieLookupKey>
+) {
+    operator fun contains(key: LocalMovieLookupKey): Boolean =
+        if (key.releaseYear == null) {
+            key.title in titles
+        } else {
+            key in titleYears
+        }
+}
+
 private data class LocalFilteredBackup(
     val file: File,
     val existingMovieCount: Int
@@ -86,12 +116,12 @@ private data class LocalFilteredMovieCsv(
 private fun createLocalFilteredBackup(
     context: Context,
     uri: Uri,
-    savedMovieKeys: Set<String>
+    savedMovieIndex: LocalSavedMovieIndex
 ): LocalFilteredBackup {
     val entries = readLocalRequiredEntries(context, uri)
     val filteredMovies = filterLocalMovieCsv(
         content = entries.getValue(LOCAL_MOVIE_HISTORY_FILE).toString(Charsets.UTF_8),
-        savedMovieKeys = savedMovieKeys
+        savedMovieIndex = savedMovieIndex
     )
     val file = File.createTempFile("tv-time-gdpr-local-", ".zip", context.cacheDir)
 
@@ -153,7 +183,7 @@ private fun readLocalRequiredEntries(
 
 private fun filterLocalMovieCsv(
     content: String,
-    savedMovieKeys: Set<String>
+    savedMovieIndex: LocalSavedMovieIndex
 ): LocalFilteredMovieCsv {
     val lines = content.lineSequence().toList()
     if (lines.size < 2) {
@@ -168,21 +198,24 @@ private fun filterLocalMovieCsv(
         return LocalFilteredMovieCsv(content, 0)
     }
 
-    val matchedMovieKeys = mutableSetOf<String>()
+    val matchedMovieKeys = mutableSetOf<LocalMovieLookupKey>()
     val retainedLines = ArrayList<String>(lines.size)
     retainedLines += lines.first()
 
     lines.drop(1).forEach { line ->
         val values = parseLocalCsvLine(line)
         val entityType = values.getOrNull(entityTypeIndex)?.trim()?.lowercase(Locale.ROOT)
-        val action = values.getOrNull(actionIndex)?.trim()?.lowercase(Locale.ROOT)
-        val movieKey = values.getOrNull(movieNameIndex)
-            ?.let(::normalizedLocalMovieKey)
+        val action = values.getOrNull(actionIndex)
+            ?.trim()
+            ?.lowercase(Locale.ROOT)
             .orEmpty()
+        val movieKey = values.getOrNull(movieNameIndex)
+            ?.let { title -> localMovieLookupKey(title) }
         val alreadySaved = entityType == "movie" &&
             action in LocalWatchedMovieActions &&
-            movieKey.isNotEmpty() &&
-            movieKey in savedMovieKeys
+            movieKey != null &&
+            movieKey.title.isNotEmpty() &&
+            movieKey in savedMovieIndex
 
         if (alreadySaved) {
             matchedMovieKeys += movieKey
@@ -231,11 +264,37 @@ private fun parseLocalCsvLine(line: String): List<String> {
 private fun normalizedLocalHeader(value: String): String =
     value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
 
-private fun normalizedLocalMovieKey(value: String): String {
-    val withoutReleaseYear = value.replace(LocalTrailingReleaseYearPattern, "")
-    val withoutAccents = Normalizer.normalize(withoutReleaseYear, Normalizer.Form.NFD)
+private fun localMovieLookupKey(
+    title: String,
+    releaseDate: String? = null
+): LocalMovieLookupKey {
+    val trimmedTitle = title.trim()
+    val match = LocalTrailingReleaseYearPattern.matchEntire(trimmedTitle)
+    val titleWithoutYear = match
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.trim()
+        ?.takeIf { value -> value.isNotEmpty() }
+        ?: trimmedTitle
+    val titleYear = match?.let { result ->
+        result.groupValues
+            .getOrNull(2)
+            ?.takeIf { value -> value.isNotEmpty() }
+            ?: result.groupValues
+                .getOrNull(3)
+                ?.takeIf { value -> value.isNotEmpty() }
+    }?.toIntOrNull()
+    val releaseYear = releaseDate
+        ?.take(4)
+        ?.toIntOrNull()
+        ?: titleYear
+    val withoutAccents = Normalizer.normalize(titleWithoutYear, Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "")
-    return withoutAccents.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
+
+    return LocalMovieLookupKey(
+        title = withoutAccents.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), ""),
+        releaseYear = releaseYear
+    )
 }
 
 private fun InputStream.readLocalLimited(maxBytes: Int): ByteArray {
