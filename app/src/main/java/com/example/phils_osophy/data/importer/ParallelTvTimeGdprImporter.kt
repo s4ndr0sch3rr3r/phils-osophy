@@ -62,10 +62,43 @@ object ParallelTvTimeGdprImporter {
 
         val seriesEntries = parsed.series.values.toList()
         val movieEntries = parsed.movies.values.toList()
+        val database = PhilsOsophyDatabase.getInstance(context)
+        val seriesDao = database.savedSeriesDao()
+        val movieDao = database.savedMovieDao()
+        val watchedEpisodeDao = database.watchedEpisodeDao()
+        val savedMovieKeys = movieDao.getAll().map { movie ->
+            parallelMovieLookupKey(
+                title = movie.title,
+                releaseDate = movie.releaseDate
+            )
+        }
+        val savedMovieIndex = ParallelSavedMovieIndex(
+            titles = savedMovieKeys
+                .asSequence()
+                .map { key -> key.title }
+                .filter { title -> title.isNotEmpty() }
+                .toSet(),
+            titleYears = savedMovieKeys
+                .asSequence()
+                .filter { key -> key.title.isNotEmpty() && key.releaseYear != null }
+                .toSet()
+        )
+        val moviesToResolve = movieEntries.filterNot { imported ->
+            val alreadySaved = parallelMovieLookupKey(imported.title) in savedMovieIndex
+            if (alreadySaved) {
+                Log.d(
+                    IMPORT_LOG_TAG,
+                    "Movie already saved; skipping TMDB lookup: ${imported.title}"
+                )
+            }
+            alreadySaved
+        }
+        val alreadySavedMovieCount = movieEntries.size - moviesToResolve.size
         Log.i(
             IMPORT_LOG_TAG,
             "Starting TMDB matching for ${seriesEntries.size} series and " +
-                "${movieEntries.size} movies"
+                "${moviesToResolve.size} movies; " +
+                "$alreadySavedMovieCount Movies already saved"
         )
 
         val semaphore = Semaphore(MAX_CONCURRENT_TMDB_LOOKUPS)
@@ -77,10 +110,10 @@ object ParallelTvTimeGdprImporter {
                     }
                 }
             }
-            val movieDeferred = movieEntries.mapIndexed { index, imported ->
+            val movieDeferred = moviesToResolve.mapIndexed { index, imported ->
                 async {
                     semaphore.withPermit {
-                        resolveMovie(imported, index, movieEntries.size)
+                        resolveMovie(imported, index, moviesToResolve.size)
                     }
                 }
             }
@@ -90,10 +123,6 @@ object ParallelTvTimeGdprImporter {
             )
         }
 
-        val database = PhilsOsophyDatabase.getInstance(context)
-        val seriesDao = database.savedSeriesDao()
-        val movieDao = database.savedMovieDao()
-        val watchedEpisodeDao = database.watchedEpisodeDao()
         var importedSeriesCount = 0
         var importedEpisodeCount = 0
         var importedMovieCount = 0
@@ -177,6 +206,23 @@ private data class ParallelImportedMovie(
     val title: String,
     var watchedAtEpochMillis: Long? = null
 )
+
+private data class ParallelMovieLookupKey(
+    val title: String,
+    val releaseYear: Int?
+)
+
+private data class ParallelSavedMovieIndex(
+    val titles: Set<String>,
+    val titleYears: Set<ParallelMovieLookupKey>
+) {
+    operator fun contains(key: ParallelMovieLookupKey): Boolean =
+        if (key.releaseYear == null) {
+            key.title in titles
+        } else {
+            key in titleYears
+        }
+}
 
 private class ParallelParsedHistory {
     val series = linkedMapOf<String, ParallelImportedSeries>()
@@ -517,8 +563,42 @@ private fun InputStream.readParallelLimited(maxBytes: Int): ByteArray {
 private fun normalizedParallelKey(value: String): String =
     value.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
 
+private val ParallelTrailingReleaseYearPattern =
+    Regex("""^(.*?)\s*(?:\((\d{4})\)|\[(\d{4})])\s*$""")
+
 private fun cleanParallelTitle(value: String): String =
     value.trim().replace(Regex("\\s+"), " ")
+
+private fun parallelMovieLookupKey(
+    title: String,
+    releaseDate: String? = null
+): ParallelMovieLookupKey {
+    val trimmedTitle = title.trim()
+    val match = ParallelTrailingReleaseYearPattern.matchEntire(trimmedTitle)
+    val titleWithoutYear = match
+        ?.groupValues
+        ?.getOrNull(1)
+        ?.trim()
+        ?.takeIf { value -> value.isNotEmpty() }
+        ?: trimmedTitle
+    val titleYear = match?.let { result ->
+        result.groupValues
+            .getOrNull(2)
+            ?.takeIf { value -> value.isNotEmpty() }
+            ?: result.groupValues
+                .getOrNull(3)
+                ?.takeIf { value -> value.isNotEmpty() }
+    }?.toIntOrNull()
+    val releaseYear = releaseDate
+        ?.take(4)
+        ?.toIntOrNull()
+        ?: titleYear
+
+    return ParallelMovieLookupKey(
+        title = normalizedParallelTitle(titleWithoutYear),
+        releaseYear = releaseYear
+    )
+}
 
 private fun normalizedParallelTitle(value: String): String {
     val withoutAccents = Normalizer.normalize(value, Normalizer.Form.NFD)
