@@ -38,7 +38,7 @@ object TmdbClient {
             val originalRequest = chain.request()
             val request = originalRequest
                 .newBuilder()
-                .url(normalizeMovieSearchUrl(originalRequest.url))
+                .url(normalizeTmdbSearchUrl(originalRequest.url))
                 .header(
                     "Authorization",
                     "Bearer ${BuildConfig.TMDB_READ_TOKEN}"
@@ -63,19 +63,21 @@ object TmdbClient {
     val api: TmdbApi = retrofit.create(TmdbApi::class.java)
 }
 
-private fun normalizeMovieSearchUrl(url: HttpUrl): HttpUrl {
-    if (!url.encodedPath.endsWith("/search/movie")) {
-        return url
+internal fun normalizeTmdbSearchUrl(url: HttpUrl): HttpUrl {
+    val yearParameter = when {
+        url.encodedPath.endsWith("/search/movie") -> "primary_release_year"
+        url.encodedPath.endsWith("/search/tv") -> "first_air_date_year"
+        else -> return url
     }
 
     val rawQuery = url.queryParameter("query") ?: return url
-    val parsedQuery = parseTmdbMovieSearchQuery(rawQuery)
-    val releaseYear = parsedQuery.releaseYear ?: return url
-
-    return url.newBuilder()
+    val parsedQuery = parseTmdbSearchQuery(rawQuery)
+    val builder = url.newBuilder()
         .setQueryParameter("query", parsedQuery.title)
-        .setQueryParameter("primary_release_year", releaseYear)
-        .build()
+    parsedQuery.year?.let { year ->
+        builder.setQueryParameter(yearParameter, year)
+    }
+    return builder.build()
 }
 
 private fun executeTmdbRequestWithRetry(
