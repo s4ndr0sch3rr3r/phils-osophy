@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "/tmp/apply_recipe_image_patch.py", line 133, in <module>
+    recipe = sub_one(
+             ^^^^^^^^
+  File "/tmp/apply_recipe_image_patch.py", line 18, in sub_one
+    updated, count = re.subn(pattern, replacement, text, count=1, flags=re.DOTALL)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/re/__init__.py", line 197, in subn
+    return _compile(pattern, flags).subn(repl, string, count)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/re/__init__.py", line 334, in _compile_template
+    return _sre.template(pattern, _parser.parse_template(repl, pattern))
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/re/_parser.py", line 1075, in parse_template
+    raise s.error('bad escape %s' % this, len(this)) from None
+re.error: bad escape \s at position 91 (line 3, column 29)
+Traceback (most recent call last):
+  File "/home/runner/work/phils-osophy/phils-osophy/scripts/execute_recipe_image_patch.py", line 80, in <module>
+    subprocess.run(["python", str(patch_script)], check=True)
+  File "/usr/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['python', '/tmp/apply_recipe_image_patch.py']' returned non-zero exit status 1.
