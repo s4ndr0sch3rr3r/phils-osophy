@@ -85,26 +85,8 @@ private fun executeTmdbRequestWithRetry(
     var retryCount = 0
 
     while (true) {
-        try {
-            val response = chain.proceed(request)
-            if (
-                response.code !in RetryableTmdbStatusCodes ||
-                retryCount >= TMDB_HTTP_MAX_RETRIES
-            ) {
-                return response
-            }
-
-            val delayMillis = tmdbRetryDelayMillis(
-                retryCount = retryCount,
-                retryAfterHeader = response.header("Retry-After")
-            )
-            Log.w(
-                TMDB_HTTP_LOG_TAG,
-                "TMDB returned HTTP ${response.code} for ${request.url.encodedPath}; " +
-                    "retry ${retryCount + 1}/$TMDB_HTTP_MAX_RETRIES in ${delayMillis}ms"
-            )
-            response.close()
-            sleepBeforeTmdbRetry(delayMillis)
+        val response = try {
+            chain.proceed(request)
         } catch (exception: IOException) {
             if (retryCount >= TMDB_HTTP_MAX_RETRIES) {
                 throw exception
@@ -121,8 +103,28 @@ private fun executeTmdbRequestWithRetry(
                 exception
             )
             sleepBeforeTmdbRetry(delayMillis)
+            retryCount += 1
+            continue
         }
 
+        if (
+            response.code !in RetryableTmdbStatusCodes ||
+            retryCount >= TMDB_HTTP_MAX_RETRIES
+        ) {
+            return response
+        }
+
+        val delayMillis = tmdbRetryDelayMillis(
+            retryCount = retryCount,
+            retryAfterHeader = response.header("Retry-After")
+        )
+        Log.w(
+            TMDB_HTTP_LOG_TAG,
+            "TMDB returned HTTP ${response.code} for ${request.url.encodedPath}; " +
+                "retry ${retryCount + 1}/$TMDB_HTTP_MAX_RETRIES in ${delayMillis}ms"
+        )
+        response.close()
+        sleepBeforeTmdbRetry(delayMillis)
         retryCount += 1
     }
 }
