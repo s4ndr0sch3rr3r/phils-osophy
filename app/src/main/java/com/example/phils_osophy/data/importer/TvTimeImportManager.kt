@@ -36,7 +36,7 @@ object TvTimeImportManager {
 
         activeJob = scope.launch {
             mutableState.value = try {
-                val result = ParallelTvTimeGdprImporter.importBackup(
+                val result = LocalAwareTvTimeGdprImporter.importBackup(
                     context = applicationContext,
                     uri = uri
                 )
