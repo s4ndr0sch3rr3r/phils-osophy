@@ -1,0 +1,47 @@
+name: Validate local-first library search
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/run-local-first-search-validation.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/local-first-library-search
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Patch Series and Books search screens
+        shell: bash
+        run: |
+          echo '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' | base64 -d | gzip -d > /tmp/patch.py
+          python /tmp/patch.py
+
+      - name: Build debug APK
+        env:
+          TMDB_READ_TOKEN: test-token
+          RAWG_API_KEY: test-key
+        run: ./gradlew :app:assembleDebug
+
+      - name: Commit validated search changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/apply-local-first-search.yml
+          git add \
+            app/src/main/java/com/example/phils_osophy/ui/screens/SeriesLibraryScreen.kt \
+            app/src/main/java/com/example/phils_osophy/ui/screens/BooksMenuScreen.kt
+          git commit -m "Search Series and Books locally before remote APIs"
+          git push origin HEAD:agent/local-first-library-search
