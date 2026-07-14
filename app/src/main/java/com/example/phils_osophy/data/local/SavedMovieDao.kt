@@ -15,6 +15,9 @@ interface SavedMovieDao {
     )
     fun observeAll(): Flow<List<SavedMovieEntity>>
 
+    @Query("SELECT * FROM saved_movies")
+    suspend fun getAll(): List<SavedMovieEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(movie: SavedMovieEntity)
 
