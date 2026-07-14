@@ -1,6 +1,4 @@
 Traceback (most recent call last):
-  File "/home/runner/work/phils-osophy/phils-osophy/.github/scripts/apply_unified_favorite_icons.py", line 134, in <module>
-    replace_exact(
-  File "/home/runner/work/phils-osophy/phils-osophy/.github/scripts/apply_unified_favorite_icons.py", line 9, in replace_exact
-    raise RuntimeError(f"Expected source block not found in {path}")
-RuntimeError: Expected source block not found in /home/runner/work/phils-osophy/phils-osophy/app/src/main/java/com/example/phils_osophy/ui/screens/MovieSearchScreen.kt
+  File "/home/runner/work/phils-osophy/phils-osophy/.github/scripts/apply_unified_favorite_icons.py", line 330, in <module>
+    raise RuntimeError(f"Legacy favorite glyphs remain in: {remaining}")
+RuntimeError: Legacy favorite glyphs remain in: ['app/src/main/java/com/example/phils_osophy/ui/screens/SeriesMenuScreen.kt']

@@ -5,9 +5,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def replace_exact(path: Path, old: str, new: str) -> None:
     text = path.read_text(encoding="utf-8")
-    if old not in text:
-        raise RuntimeError(f"Expected source block not found in {path}")
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    if old in text:
+        path.write_text(text.replace(old, new, 1), encoding="utf-8")
+        return
+    if new in text:
+        return
+    raise RuntimeError(f"Expected source block not found in {path}")
 
 
 def add_import(path: Path, anchor: str) -> None:
