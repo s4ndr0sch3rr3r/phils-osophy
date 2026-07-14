@@ -85,7 +85,7 @@ fun SeriesLibraryScreen(
     BackHandler(onBack = onBackClick)
 
     var query by remember { mutableStateOf("") }
-    var searchResults by remember {
+    var remoteSearchResults by remember {
         mutableStateOf<List<SeriesDto>>(emptyList())
     }
     var isLoading by remember { mutableStateOf(false) }
@@ -133,10 +133,22 @@ fun SeriesLibraryScreen(
     val savedSeriesIds = remember(allSavedSeries) {
         allSavedSeries.map { series -> series.id }.toSet()
     }
+    val cleanQuery = query.trim()
+    val localSearchResults = if (hasSearched) {
+        allSavedSeries.filter { series ->
+            (!showFavoritesOnly || series.isFavorite) &&
+                series.name.contains(cleanQuery, ignoreCase = true)
+        }
+    } else {
+        emptyList()
+    }
+    val visibleRemoteResults = remoteSearchResults.filterNot { series ->
+        series.id in savedSeriesIds
+    }
 
     fun resetSearch() {
         hasSearched = false
-        searchResults = emptyList()
+        remoteSearchResults = emptyList()
         errorMessage = null
         isLoading = false
     }
@@ -159,21 +171,30 @@ fun SeriesLibraryScreen(
     }
 
     fun searchSeries() {
-        val cleanQuery = query.trim()
-        if (cleanQuery.isBlank() || isLoading) {
+        val submittedQuery = query.trim()
+        if (submittedQuery.isBlank() || isLoading) {
             return
         }
 
         hasSearched = true
         errorMessage = null
+        remoteSearchResults = emptyList()
+
+        if (showFavoritesOnly) {
+            return
+        }
+
         coroutineScope.launch {
             isLoading = true
             try {
-                searchResults = TmdbClient.api
-                    .searchSeries(cleanQuery)
+                val results = TmdbClient.api
+                    .searchSeries(submittedQuery)
                     .results
+                if (query.trim() == submittedQuery) {
+                    remoteSearchResults = results
+                }
             } catch (exception: Exception) {
-                searchResults = emptyList()
+                remoteSearchResults = emptyList()
                 errorMessage = exception.localizedMessage
                     ?: "Series search failed."
             } finally {
@@ -236,7 +257,15 @@ fun SeriesLibraryScreen(
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        label = { Text("Search for a series") },
+                        label = {
+                            Text(
+                                if (showFavoritesOnly) {
+                                    "Search within favorites"
+                                } else {
+                                    "Search for a series"
+                                }
+                            )
+                        },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Search
@@ -309,47 +338,83 @@ fun SeriesLibraryScreen(
                 )
             }
         } else {
-            Box(
+            LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                when {
-                    isLoading -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.align(Alignment.Center)
+                if (localSearchResults.isNotEmpty()) {
+                    item(key = "local-series-heading") {
+                        SeriesSearchHeading("In your library")
+                    }
+                    items(
+                        items = localSearchResults,
+                        key = { series -> "local-${series.id}" }
+                    ) { series ->
+                        LibrarySearchResult(
+                            name = series.name,
+                            firstAirDate = series.firstAirDate,
+                            overview = series.overview,
+                            posterPath = series.posterPath,
+                            onImageClick = {
+                                onSeriesClick(series.id)
+                            }
                         )
                     }
+                }
 
-                    errorMessage != null -> {
-                        Text(
-                            text = errorMessage.orEmpty(),
-                            color = MaterialTheme.colorScheme.error
-                        )
+                if (!showFavoritesOnly) {
+                    item(key = "tmdb-series-heading") {
+                        SeriesSearchHeading("TMDB results")
                     }
 
-                    searchResults.isEmpty() -> {
-                        Text("No series found.")
-                    }
-
-                    else -> {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(
-                                items = searchResults,
-                                key = { series -> series.id }
-                            ) { series ->
-                                LibrarySearchResult(
-                                    series = series,
-                                    isAdded = series.id in savedSeriesIds,
-                                    onAddClick = {
-                                        pendingSeries = series
-                                    }
-                                )
+                    if (isLoading) {
+                        item(key = "tmdb-series-loading") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator()
                             }
                         }
+                    }
+
+                    errorMessage?.let { message ->
+                        item(key = "tmdb-series-error") {
+                            Text(
+                                text = message,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    items(
+                        items = visibleRemoteResults,
+                        key = { series -> "remote-${series.id}" }
+                    ) { series ->
+                        LibrarySearchResult(
+                            name = series.name,
+                            firstAirDate = series.firstAirDate,
+                            overview = series.overview,
+                            posterPath = series.posterPath,
+                            onAddClick = {
+                                pendingSeries = series
+                            }
+                        )
+                    }
+                }
+
+                if (
+                    !isLoading &&
+                    errorMessage == null &&
+                    localSearchResults.isEmpty() &&
+                    visibleRemoteResults.isEmpty()
+                ) {
+                    item(key = "series-empty") {
+                        Text("No series found.")
                     }
                 }
             }
@@ -372,7 +437,6 @@ fun SeriesLibraryScreen(
             }
         )
     }
-
 }
 
 private fun LazyListScope.librarySectionItems(
@@ -511,6 +575,7 @@ private fun LazyListScope.librarySectionItems(
         Spacer(modifier = Modifier.height(20.dp))
     }
 }
+
 @Composable
 private fun LibrarySeriesPoster(
     series: SavedSeriesEntity,
@@ -593,7 +658,6 @@ private fun LibrarySeriesPoster(
                     modifier = Modifier.padding(6.dp),
                     starSize = 20.sp
                 )
-
             }
         }
 
@@ -602,21 +666,40 @@ private fun LibrarySeriesPoster(
 }
 
 @Composable
+private fun SeriesSearchHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
 private fun LibrarySearchResult(
-    series: SeriesDto,
-    isAdded: Boolean,
-    onAddClick: () -> Unit
+    name: String,
+    firstAirDate: String,
+    overview: String,
+    posterPath: String?,
+    onImageClick: (() -> Unit)? = null,
+    onAddClick: (() -> Unit)? = null
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(12.dp)) {
-            val posterUrl = series.posterPath?.let { path ->
+            val posterUrl = posterPath?.let { path ->
                 "$TMDB_LIBRARY_POSTER_BASE_URL$path"
             }
 
             Box(
                 modifier = Modifier
                     .size(width = 96.dp, height = 144.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .then(
+                        if (onImageClick != null) {
+                            Modifier.clickable(onClick = onImageClick)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 if (posterUrl != null) {
@@ -625,13 +708,13 @@ private fun LibrarySearchResult(
                             .data(posterUrl)
                             .crossfade(true)
                             .build(),
-                        contentDescription = "${series.name} poster",
+                        contentDescription = "$name poster",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 } else {
                     Text(
-                        text = series.name,
+                        text = name,
                         modifier = Modifier.padding(8.dp),
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
@@ -642,30 +725,29 @@ private fun LibrarySearchResult(
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = series.name,
+                    text = name,
                     style = MaterialTheme.typography.titleMedium
                 )
-                if (series.firstAirDate.isNotBlank()) {
+                if (firstAirDate.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "First aired: ${series.firstAirDate}",
+                        text = "First aired: $firstAirDate",
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
-                if (series.overview.isNotBlank()) {
+                if (overview.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = series.overview,
+                        text = overview,
                         maxLines = 4,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = onAddClick,
-                    enabled = !isAdded
-                ) {
-                    Text(if (isAdded) "Added" else "+ Add")
+                onAddClick?.let { addClick ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(onClick = addClick) {
+                        Text("+ Add")
+                    }
                 }
             }
         }
