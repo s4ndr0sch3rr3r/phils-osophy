@@ -1,39 +1,63 @@
 package com.example.phils_osophy.data.remote
 
+internal data class TmdbSearchQuery(
+    val title: String,
+    val year: String?
+)
+
 internal data class TmdbMovieSearchQuery(
     val title: String,
     val releaseYear: String?
 )
 
-private val TrailingReleaseYearPattern =
-    Regex("""^(.*?)\s*(?:\((\d{4})\)|\[(\d{4})\])\s*$""")
+private val TrailingSearchQualifierPattern =
+    Regex("""^(.*?)\s*(?:\(([^()]*)\)|\[([^\[\]]*)\])\s*$""")
+private val FourDigitYearPattern = Regex("""\d{4}""")
+private val RegionQualifierPattern = Regex("""(?i)[a-z]{2,5}""")
 
-internal fun parseTmdbMovieSearchQuery(rawQuery: String): TmdbMovieSearchQuery {
+internal fun parseTmdbSearchQuery(rawQuery: String): TmdbSearchQuery {
     val trimmedQuery = rawQuery.trim()
-    val match = TrailingReleaseYearPattern.matchEntire(trimmedQuery)
+    val match = TrailingSearchQualifierPattern.matchEntire(trimmedQuery)
     val title = match
         ?.groupValues
         ?.getOrNull(1)
         ?.trim()
         .orEmpty()
-    val releaseYear = match?.let { result ->
+    val qualifier = match?.let { result ->
         result.groupValues
             .getOrNull(2)
             ?.takeIf { value -> value.isNotBlank() }
             ?: result.groupValues
                 .getOrNull(3)
                 ?.takeIf { value -> value.isNotBlank() }
+    }?.trim()
+
+    if (title.isBlank() || qualifier.isNullOrBlank()) {
+        return TmdbSearchQuery(
+            title = trimmedQuery,
+            year = null
+        )
     }
 
-    return if (title.isNotBlank() && releaseYear != null) {
-        TmdbMovieSearchQuery(
+    val year = qualifier.takeIf(FourDigitYearPattern::matches)
+    val shouldRemoveQualifier = year != null || RegionQualifierPattern.matches(qualifier)
+    return if (shouldRemoveQualifier) {
+        TmdbSearchQuery(
             title = title,
-            releaseYear = releaseYear
+            year = year
         )
     } else {
-        TmdbMovieSearchQuery(
+        TmdbSearchQuery(
             title = trimmedQuery,
-            releaseYear = null
+            year = null
         )
     }
+}
+
+internal fun parseTmdbMovieSearchQuery(rawQuery: String): TmdbMovieSearchQuery {
+    val parsed = parseTmdbSearchQuery(rawQuery)
+    return TmdbMovieSearchQuery(
+        title = parsed.title,
+        releaseYear = parsed.year
+    )
 }
