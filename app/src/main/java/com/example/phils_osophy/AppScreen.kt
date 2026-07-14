@@ -13,5 +13,6 @@ enum class AppScreen {
     Profile,
     GamesMenu,
     BooksMenu,
-    RecipesMenu
+    RecipesMenu,
+    RecipeDetail
 }

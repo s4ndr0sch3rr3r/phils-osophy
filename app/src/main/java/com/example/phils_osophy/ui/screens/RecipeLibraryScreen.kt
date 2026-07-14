@@ -64,9 +64,8 @@ fun RecipeLibraryScreen(
     toTryRecipes: List<SavedRecipeEntity>,
     stoppedRecipes: List<SavedRecipeEntity>,
     onAddRecipe: (title: String, status: RecipeStatus) -> Unit,
+    onRecipeClick: (recipeKey: String) -> Unit,
     onFavoriteClick: (recipeKey: String, isFavorite: Boolean) -> Unit,
-    onStatusChange: (recipeKey: String, status: RecipeStatus) -> Unit,
-    onRemoveRecipe: (recipeKey: String) -> Unit,
     onBackClick: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
@@ -76,7 +75,6 @@ fun RecipeLibraryScreen(
     var showFavoritesOnly by remember { mutableStateOf(false) }
     var isSearchBarVisible by remember { mutableStateOf(true) }
     var pendingRecipeTitle by remember { mutableStateOf<String?>(null) }
-    var selectedRecipeKey by remember { mutableStateOf<String?>(null) }
     val expandedSections = remember {
         mutableStateMapOf<String, Boolean>()
     }
@@ -110,9 +108,6 @@ fun RecipeLibraryScreen(
     }
     val savedRecipeKeys = remember(allRecipes) {
         allRecipes.map { recipe -> recipe.key }.toSet()
-    }
-    val selectedRecipe = allRecipes.firstOrNull { recipe ->
-        recipe.key == selectedRecipeKey
     }
 
     fun filtered(recipes: List<SavedRecipeEntity>): List<SavedRecipeEntity> =
@@ -219,9 +214,7 @@ fun RecipeLibraryScreen(
                         expandedSections["En cours"] =
                             expandedSections["En cours"] != true
                     },
-                    onRecipeClick = { recipeKey ->
-                        selectedRecipeKey = recipeKey
-                    },
+                    onRecipeClick = onRecipeClick,
                     onFavoriteClick = onFavoriteClick
                 )
                 recipeSectionItems(
@@ -232,9 +225,7 @@ fun RecipeLibraryScreen(
                         expandedSections["Recettes terminées"] =
                             expandedSections["Recettes terminées"] != true
                     },
-                    onRecipeClick = { recipeKey ->
-                        selectedRecipeKey = recipeKey
-                    },
+                    onRecipeClick = onRecipeClick,
                     onFavoriteClick = onFavoriteClick
                 )
                 recipeSectionItems(
@@ -245,9 +236,7 @@ fun RecipeLibraryScreen(
                         expandedSections["Recettes à essayer"] =
                             expandedSections["Recettes à essayer"] != true
                     },
-                    onRecipeClick = { recipeKey ->
-                        selectedRecipeKey = recipeKey
-                    },
+                    onRecipeClick = onRecipeClick,
                     onFavoriteClick = onFavoriteClick
                 )
                 recipeSectionItems(
@@ -258,9 +247,7 @@ fun RecipeLibraryScreen(
                         expandedSections["Recettes abandonnées"] =
                             expandedSections["Recettes abandonnées"] != true
                     },
-                    onRecipeClick = { recipeKey ->
-                        selectedRecipeKey = recipeKey
-                    },
+                    onRecipeClick = onRecipeClick,
                     onFavoriteClick = onFavoriteClick
                 )
             }
@@ -299,22 +286,6 @@ fun RecipeLibraryScreen(
         )
     }
 
-    selectedRecipe?.let { recipe ->
-        RecipeManageDialog(
-            recipe = recipe,
-            onStatusChange = { status ->
-                onStatusChange(recipe.key, status)
-                selectedRecipeKey = null
-            },
-            onRemove = {
-                onRemoveRecipe(recipe.key)
-                selectedRecipeKey = null
-            },
-            onDismiss = {
-                selectedRecipeKey = null
-            }
-        )
-    }
 }
 
 private fun LazyListScope.recipeSectionItems(
@@ -555,53 +526,6 @@ private fun RecipeAddDialog(
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun RecipeManageDialog(
-    recipe: SavedRecipeEntity,
-    onStatusChange: (RecipeStatus) -> Unit,
-    onRemove: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    var selectedStatus by remember(recipe.key, recipe.status) {
-        mutableStateOf(RecipeStatus.fromStorage(recipe.status))
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(recipe.title) },
-        text = {
-            Column {
-                RecipeStatus.values().forEach { status ->
-                    RecipeStatusRow(
-                        status = status,
-                        selected = status == selectedStatus,
-                        onClick = {
-                            selectedStatus = status
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onRemove) {
-                    Text(
-                        text = "Remove recipe",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onStatusChange(selectedStatus) }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
         }

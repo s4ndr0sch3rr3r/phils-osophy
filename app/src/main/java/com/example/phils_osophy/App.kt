@@ -29,6 +29,7 @@ import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
 import com.example.phils_osophy.ui.screens.ProfileScreen
+import com.example.phils_osophy.ui.screens.RecipeDetailScreen
 import com.example.phils_osophy.ui.screens.RecipeLibraryScreen
 import com.example.phils_osophy.ui.screens.SeriesDetailScreen
 import com.example.phils_osophy.ui.screens.SeriesLibraryScreen
@@ -54,6 +55,9 @@ fun App() {
     }
     var pendingMovie by remember {
         mutableStateOf<MovieDto?>(null)
+    }
+    var selectedRecipeKey by remember {
+        mutableStateOf<String?>(null)
     }
 
     val applicationContext = LocalContext.current.applicationContext
@@ -127,6 +131,20 @@ fun App() {
     val stoppedRecipes by stoppedRecipesFlow.collectAsState(
         initial = emptyList()
     )
+
+    val allSavedRecipes = remember(
+        inProgressRecipes,
+        finishedRecipes,
+        toTryRecipes,
+        stoppedRecipes
+    ) {
+        (
+            inProgressRecipes +
+                finishedRecipes +
+                toTryRecipes +
+                stoppedRecipes
+            ).distinctBy { recipe -> recipe.key }
+    }
 
     val inProgressSeriesFlow = remember(savedSeriesDao) {
         savedSeriesDao.observeInProgress()
@@ -203,10 +221,20 @@ fun App() {
         selectedEpisodeNumber = null
     }
 
+    fun clearSelectedRecipe() {
+        selectedRecipeKey = null
+    }
+
+    fun openRecipes() {
+        clearSelectedRecipe()
+        currentScreen = AppScreen.RecipesMenu
+    }
+
     fun openMovies() {
         pendingMovie = null
         selectedMovieId = null
         clearSelectedSeries()
+        clearSelectedRecipe()
         currentScreen = AppScreen.MoviesMenu
     }
 
@@ -220,6 +248,7 @@ fun App() {
         pendingMovie = null
         selectedMovieId = null
         clearSelectedSeries()
+        clearSelectedRecipe()
         currentScreen = AppScreen.Profile
     }
 
@@ -238,6 +267,7 @@ fun App() {
             AppScreen.BooksMenu,
             AppScreen.RecipesMenu -> openMovies()
 
+            AppScreen.RecipeDetail -> openRecipes()
             AppScreen.MoviesMenu -> Unit
         }
     }
@@ -248,6 +278,7 @@ fun App() {
             pendingMovie = null
             selectedMovieId = null
             clearSelectedSeries()
+            clearSelectedRecipe()
             currentScreen = category.toAppScreen()
         },
         isProfileSelected = currentScreen == AppScreen.Profile,
@@ -575,6 +606,10 @@ fun App() {
                             )
                         }
                     },
+                    onRecipeClick = { recipeKey ->
+                        selectedRecipeKey = recipeKey
+                        currentScreen = AppScreen.RecipeDetail
+                    },
                     onFavoriteClick = { recipeKey, isFavorite ->
                         coroutineScope.launch {
                             savedRecipeDao.updateFavorite(
@@ -583,21 +618,65 @@ fun App() {
                             )
                         }
                     },
-                    onStatusChange = { recipeKey, status ->
-                        coroutineScope.launch {
-                            savedRecipeDao.updateStatus(
-                                recipeKey = recipeKey,
-                                status = status.name
-                            )
-                        }
-                    },
-                    onRemoveRecipe = { recipeKey ->
-                        coroutineScope.launch {
-                            savedRecipeDao.deleteByKey(recipeKey)
-                        }
-                    },
                     onBackClick = ::openMovies
                 )
+            }
+
+            AppScreen.RecipeDetail -> {
+                val selectedRecipe = allSavedRecipes.firstOrNull { recipe ->
+                    recipe.key == selectedRecipeKey
+                }
+
+                if (selectedRecipe != null) {
+                    RecipeDetailScreen(
+                        recipe = selectedRecipe,
+                        onBackClick = ::openRecipes,
+                        onFavoriteClick = { isFavorite ->
+                            coroutineScope.launch {
+                                savedRecipeDao.updateFavorite(
+                                    recipeKey = selectedRecipe.key,
+                                    isFavorite = isFavorite
+                                )
+                            }
+                        },
+                        onStatusChange = { status ->
+                            coroutineScope.launch {
+                                savedRecipeDao.updateStatus(
+                                    recipeKey = selectedRecipe.key,
+                                    status = status.name
+                                )
+                            }
+                        },
+                        onSaveDetails = {
+                                difficulty,
+                                prepTimeMinutes,
+                                totalTimeMinutes,
+                                ingredients,
+                                cookingSteps ->
+                            coroutineScope.launch {
+                                savedRecipeDao.updateDetails(
+                                    recipeKey = selectedRecipe.key,
+                                    difficulty = difficulty,
+                                    prepTimeMinutes = prepTimeMinutes,
+                                    totalTimeMinutes = totalTimeMinutes,
+                                    ingredients = ingredients,
+                                    cookingSteps = cookingSteps
+                                )
+                            }
+                        },
+                        onRemoveRecipe = {
+                            coroutineScope.launch {
+                                savedRecipeDao.deleteByKey(selectedRecipe.key)
+                                openRecipes()
+                            }
+                        }
+                    )
+                } else {
+                    EmptyPageScreen(
+                        title = "Recipe unavailable",
+                        onBackClick = ::openRecipes
+                    )
+                }
             }
         }
     }
@@ -636,7 +715,8 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.Profile -> null
     AppScreen.GamesMenu -> BottomCategory.Games
     AppScreen.BooksMenu -> BottomCategory.Books
-    AppScreen.RecipesMenu -> BottomCategory.Recipes
+    AppScreen.RecipesMenu,
+    AppScreen.RecipeDetail -> BottomCategory.Recipes
 }
 
 private fun BottomCategory.toAppScreen(): AppScreen = when (this) {

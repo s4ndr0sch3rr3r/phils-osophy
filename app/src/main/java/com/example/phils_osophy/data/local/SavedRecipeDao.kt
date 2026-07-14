@@ -52,6 +52,24 @@ interface SavedRecipeDao {
     )
     suspend fun updateFavorite(recipeKey: String, isFavorite: Boolean)
 
+    @Query(
+        "UPDATE saved_recipes SET " +
+            "difficulty = :difficulty, " +
+            "prepTimeMinutes = :prepTimeMinutes, " +
+            "totalTimeMinutes = :totalTimeMinutes, " +
+            "ingredients = :ingredients, " +
+            "cookingSteps = :cookingSteps " +
+            "WHERE `key` = :recipeKey"
+    )
+    suspend fun updateDetails(
+        recipeKey: String,
+        difficulty: String,
+        prepTimeMinutes: Int,
+        totalTimeMinutes: Int,
+        ingredients: String,
+        cookingSteps: String
+    )
+
     @Query("DELETE FROM saved_recipes WHERE `key` = :recipeKey")
     suspend fun deleteByKey(recipeKey: String)
 }
