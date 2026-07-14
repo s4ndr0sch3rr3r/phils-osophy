@@ -24,9 +24,22 @@ jobs:
           java-version: '17'
 
       - name: Apply Recipe image integration
-        run: python scripts/execute_recipe_image_patch.py
+        id: patch
+        continue-on-error: true
+        run: python scripts/execute_recipe_image_patch.py 2>&1 | tee recipe-image-executor-error.txt
+
+      - name: Record executor failure
+        if: steps.patch.outcome == 'failure'
+        run: |
+          rm -f .github/workflows/apply-recipe-image-search-v2.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Record Recipe image executor failure"
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Run unit tests and build debug APK
+        if: steps.patch.outcome == 'success'
         env:
           TMDB_READ_TOKEN: test-token
           RAWG_API_KEY: test-key
@@ -34,6 +47,7 @@ jobs:
         run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
 
       - name: Commit validated changes
+        if: steps.patch.outcome == 'success'
         run: |
           rm -f .github/workflows/apply-recipe-image-search.yml
           rm -f .github/workflows/apply-recipe-image-search-v2.yml
@@ -42,6 +56,7 @@ jobs:
           rm -f recipe-image-patch-diagnostics.txt
           rm -f recipe-image-v2-diagnostics.txt
           rm -f recipe-image-trigger.txt
+          rm -f recipe-image-executor-error.txt
           rm -f scripts/execute_recipe_image_patch.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
