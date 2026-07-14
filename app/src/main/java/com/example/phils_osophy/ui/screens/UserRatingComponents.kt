@@ -62,7 +62,7 @@ fun BoxScope.UserRatingBadge(
         )
         Text(
             text = rating.toString(),
-            modifier = Modifier.offset(y = (-1).dp),
+            modifier = Modifier.offset(y = 2.dp),
             color = Color.Black,
             fontSize = ratingTextSize,
             fontWeight = FontWeight.Black

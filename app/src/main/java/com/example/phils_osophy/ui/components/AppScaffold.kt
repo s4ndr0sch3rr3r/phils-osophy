@@ -48,7 +48,7 @@ fun AppScaffold(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(top = 16.dp, end = 16.dp)
+                    .padding(top = 20.dp, end = 16.dp)
             )
         }
     }
