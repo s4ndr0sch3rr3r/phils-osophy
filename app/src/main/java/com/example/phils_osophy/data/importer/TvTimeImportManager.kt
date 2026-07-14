@@ -2,6 +2,7 @@ package com.example.phils_osophy.data.importer
 
 import android.content.Context
 import android.net.Uri
+import com.example.phils_osophy.ui.TvTimeImportReportActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,9 +36,13 @@ object TvTimeImportManager {
 
         activeJob = scope.launch {
             mutableState.value = try {
-                val result = TvTimeGdprImporter.importBackup(
+                val result = ParallelTvTimeGdprImporter.importBackup(
                     context = applicationContext,
                     uri = uri
+                )
+                TvTimeImportReportActivity.show(
+                    context = applicationContext,
+                    report = result.completionReport()
                 )
                 TvTimeImportState(
                     message = result.summary(),
