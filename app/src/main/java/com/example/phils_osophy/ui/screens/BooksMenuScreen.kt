@@ -227,23 +227,6 @@ fun BooksMenuScreen(
                 )
             }
         },
-        onSaveReadingState = { book, status, progress ->
-            updateBook(book, status, progress)
-        },
-        onChangeRating = { bookKey, rating ->
-            coroutineScope.launch {
-                savedBookDao.updateRating(
-                    bookKey = bookKey,
-                    userRating = rating.coerceIn(0, USER_RATING_MAX)
-                )
-            }
-        },
-        onSaveComment = ::updateComment,
-        onRemoveBook = { bookKey ->
-            coroutineScope.launch {
-                savedBookDao.deleteByKey(bookKey)
-            }
-        },
         onBackClick = onBackClick
     )
 }
@@ -257,14 +240,6 @@ private fun BookLibraryScreen(
     onAddBook: (BookDto, BookStatus) -> Unit,
     onBookClick: (String) -> Unit,
     onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit,
-    onSaveReadingState: (
-        book: SavedBookEntity,
-        status: BookStatus,
-        progress: Int
-    ) -> Unit,
-    onChangeRating: (bookKey: String, rating: Int) -> Unit,
-    onSaveComment: (bookKey: String, comment: String) -> Unit,
-    onRemoveBook: (String) -> Unit,
     onBackClick: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
@@ -279,16 +254,6 @@ private fun BookLibraryScreen(
     var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingBook by remember { mutableStateOf<BookDto?>(null) }
-    var managedBook by remember {
-        mutableStateOf<SavedBookEntity?>(null)
-    }
-    var ratingBook by remember {
-        mutableStateOf<SavedBookEntity?>(null)
-    }
-    var commentBook by remember {
-        mutableStateOf<SavedBookEntity?>(null)
-    }
-
     val coroutineScope = rememberCoroutineScope()
     val searchBarScrollConnection = remember {
         object : NestedScrollConnection {
@@ -444,8 +409,7 @@ private fun BookLibraryScreen(
                         title = "En cours",
                         books = filtered(inProgressBooks),
                         onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book -> managedBook = book }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -453,8 +417,7 @@ private fun BookLibraryScreen(
                         title = "Livres terminés",
                         books = filtered(finishedBooks),
                         onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book -> managedBook = book }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -462,8 +425,7 @@ private fun BookLibraryScreen(
                         title = "Livres à lire",
                         books = filtered(toReadBooks),
                         onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book -> managedBook = book }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -471,8 +433,7 @@ private fun BookLibraryScreen(
                         title = "Livres abandonnés",
                         books = filtered(abandonedBooks),
                         onBookClick = onBookClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { book -> managedBook = book }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
             }
@@ -534,58 +495,6 @@ private fun BookLibraryScreen(
         )
     }
 
-    managedBook?.let { book ->
-        BookManageDialog(
-            book = book,
-            onSave = { status, progress ->
-                onSaveReadingState(book, status, progress)
-                managedBook = null
-            },
-            onChangeRating = {
-                ratingBook = book
-                managedBook = null
-            },
-            onChangeComment = {
-                commentBook = book
-                managedBook = null
-            },
-            onRemove = {
-                onRemoveBook(book.key)
-                managedBook = null
-            },
-            onCancel = {
-                managedBook = null
-            }
-        )
-    }
-
-    ratingBook?.let { book ->
-        UserRatingDialog(
-            title = "Rate ${book.title}",
-            initialRating = book.userRating,
-            onSave = { rating ->
-                onChangeRating(book.key, rating)
-                ratingBook = null
-            },
-            onCancel = {
-                ratingBook = null
-            }
-        )
-    }
-
-    commentBook?.let { book ->
-        MediaCommentDialog(
-            mediaKey = book.key,
-            initialComment = book.note,
-            onSave = { comment ->
-                onSaveComment(book.key, comment)
-                commentBook = null
-            },
-            onCancel = {
-                commentBook = null
-            }
-        )
-    }
 }
 
 @Composable
@@ -593,8 +502,7 @@ private fun BookShelf(
     title: String,
     books: List<SavedBookEntity>,
     onBookClick: (String) -> Unit,
-    onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit,
-    onManageClick: (SavedBookEntity) -> Unit
+    onFavoriteClick: (bookKey: String, isFavorite: Boolean) -> Unit
 ) {
     var isExpanded by remember(title) {
         mutableStateOf(true)
@@ -647,9 +555,6 @@ private fun BookShelf(
                                         book.key,
                                         !book.isFavorite
                                     )
-                                },
-                                onManageClick = {
-                                    onManageClick(book)
                                 }
                             )
                         }
@@ -664,8 +569,7 @@ private fun BookShelf(
 private fun SavedBookCard(
     book: SavedBookEntity,
     onBookClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onManageClick: () -> Unit
+    onFavoriteClick: () -> Unit
 ) {
     Column(modifier = Modifier.width(104.dp)) {
         Box(
@@ -694,20 +598,6 @@ private fun SavedBookCard(
             UserRatingBadge(
                 rating = book.userRating,
                 modifier = Modifier.padding(6.dp)
-            )
-            Text(
-                text = "•••",
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp)
-                    .background(
-                        color = Color.Black.copy(alpha = 0.65f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .clickable(onClick = onManageClick)
-                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                color = Color.White,
-                fontSize = 16.sp
             )
         }
 
@@ -957,7 +847,7 @@ private fun BookDetailScreen(
     onRemove: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
-    var showManageDialog by remember {
+    var showManageDialog by remember(book.key) {
         mutableStateOf(false)
     }
     var showRatingDialog by remember(book.key) {
@@ -967,152 +857,168 @@ private fun BookDetailScreen(
         mutableStateOf(false)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(16.dp)
-    ) {
-        TextButton(onClick = onBackClick) {
-            Text("← Back")
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(16.dp)
+        ) {
+            TextButton(onClick = onBackClick) {
+                Text("← Back")
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Book details",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                TextButton(onClick = { showRatingDialog = true }) {
+                    Text(
+                        if (book.userRating in 1..USER_RATING_MAX) {
+                            "${book.userRating}/$USER_RATING_MAX"
+                        } else {
+                            "Rate"
+                        }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                item {
+                    BookCover(
+                        coverId = book.coverId,
+                        title = book.title,
+                        modifier = Modifier.size(width = 180.dp, height = 270.dp)
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = book.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (book.authors.isNotBlank()) {
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = book.authors,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Reading progress: ${
+                            book.readingProgressPercent.coerceIn(0, 100)
+                        }%",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ReadingProgressBar(
+                        progress = book.readingProgressPercent
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    DetailLine(
+                        label = "Category",
+                        value = bookStatusLabel(
+                            BookStatus.fromStorage(book.status)
+                        )
+                    )
+                }
+                book.firstPublishYear?.let { year ->
+                    item {
+                        DetailLine(
+                            label = "First published",
+                            value = year.toString()
+                        )
+                    }
+                }
+                item {
+                    DetailLine(
+                        label = "Editions",
+                        value = book.editionCount.toString()
+                    )
+                }
+                item {
+                    DetailLine(
+                        label = "Date added",
+                        value = formatStoredDate(book.addedAtEpochMillis)
+                    )
+                }
+                if (
+                    book.readingProgressPercent >= 100 ||
+                    BookStatus.fromStorage(book.status) == BookStatus.FINISHED
+                ) {
+                    item {
+                        DetailLine(
+                            label = "Finished reading",
+                            value = formatStoredDate(book.finishedAtEpochMillis)
+                        )
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider()
+                    EditableMediaCommentSection(
+                        mediaKey = book.key,
+                        savedComment = book.note,
+                        onSave = onSaveComment,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = 0.dp
+                    )
+                }
+            }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+
+        TextButton(
+            onClick = { onFavoriteClick(!book.isFavorite) },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = 116.dp, top = 20.dp)
         ) {
             Text(
-                text = "Book details",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineMedium
+                text = if (book.isFavorite) "♥" else "♡",
+                color = if (book.isFavorite) {
+                    BookFavoriteColor
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                fontSize = 30.sp
             )
-            TextButton(onClick = { showRatingDialog = true }) {
-                Text(if (book.userRating in 1..USER_RATING_MAX) "${book.userRating}/$USER_RATING_MAX" else "Rate")
-            }
-            TextButton(
-                onClick = {
-                    onFavoriteClick(!book.isFavorite)
-                }
-            ) {
-                Text(
-                    text = if (book.isFavorite) "♥" else "♡",
-                    color = if (book.isFavorite) {
-                        BookFavoriteColor
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    fontSize = 30.sp
-                )
-            }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(bottom = 24.dp)
+        TextButton(
+            onClick = { showManageDialog = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = 66.dp, top = 20.dp)
         ) {
-            item {
-                BookCover(
-                    coverId = book.coverId,
-                    title = book.title,
-                    modifier = Modifier.size(width = 180.dp, height = 270.dp)
-                )
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            if (book.authors.isNotBlank()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = book.authors,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-            }
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Reading progress: ${
-                        book.readingProgressPercent.coerceIn(0, 100)
-                    }%",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ReadingProgressBar(
-                    progress = book.readingProgressPercent
-                )
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                DetailLine(
-                    label = "Category",
-                    value = bookStatusLabel(
-                        BookStatus.fromStorage(book.status)
-                    )
-                )
-            }
-            book.firstPublishYear?.let { year ->
-                item {
-                    DetailLine(
-                        label = "First published",
-                        value = year.toString()
-                    )
-                }
-            }
-            item {
-                DetailLine(
-                    label = "Editions",
-                    value = book.editionCount.toString()
-                )
-            }
-            item {
-                DetailLine(
-                    label = "Date added",
-                    value = formatStoredDate(book.addedAtEpochMillis)
-                )
-            }
-            if (
-                book.readingProgressPercent >= 100 ||
-                BookStatus.fromStorage(book.status) == BookStatus.FINISHED
-            ) {
-                item {
-                    DetailLine(
-                        label = "Finished reading",
-                        value = formatStoredDate(book.finishedAtEpochMillis)
-                    )
-                }
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(
-                    onClick = {
-                        showManageDialog = true
-                    }
-                ) {
-                    Text("Manage book")
-                }
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider()
-                EditableMediaCommentSection(
-                    mediaKey = book.key,
-                    savedComment = book.note,
-                    onSave = onSaveComment,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = 0.dp
-                )
-            }
+            Text(
+                text = "•••",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 
