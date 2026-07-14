@@ -18,24 +18,20 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,9 +40,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedMovieEntity
-import kotlinx.coroutines.launch
 
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
@@ -58,8 +52,6 @@ fun MovieListScreen(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
-    onChangeRating: (movieId: Int, rating: Int) -> Unit,
-    onRemoveMovie: (movieId: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     Column(
@@ -84,8 +76,6 @@ fun MovieListScreen(
             movies = movies,
             onMovieClick = onMovieClick,
             onFavoriteClick = onFavoriteClick,
-            onChangeRating = onChangeRating,
-            onRemoveMovie = onRemoveMovie,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -96,8 +86,6 @@ fun SavedMovieGrid(
     movies: List<SavedMovieEntity>,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
-    onChangeRating: (movieId: Int, rating: Int) -> Unit,
-    onRemoveMovie: (movieId: Int) -> Unit,
     modifier: Modifier = Modifier,
     emptyMessage: String = "No movies added yet."
 ) {
@@ -132,12 +120,6 @@ fun SavedMovieGrid(
                         movie.id,
                         !movie.isFavorite
                     )
-                },
-                onChangeRating = { rating ->
-                    onChangeRating(movie.id, rating)
-                },
-                onRemoveMovie = {
-                    onRemoveMovie(movie.id)
                 }
             )
         }
@@ -148,9 +130,7 @@ fun SavedMovieGrid(
 private fun MoviePosterTile(
     movie: SavedMovieEntity,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onChangeRating: (Int) -> Unit,
-    onRemoveMovie: () -> Unit
+    onFavoriteClick: () -> Unit
 ) {
     val posterUrl = movie.posterPath
         ?.takeIf { path -> path.isNotBlank() }
@@ -162,19 +142,6 @@ private fun MoviePosterTile(
     var hasError by remember(posterUrl) {
         mutableStateOf(false)
     }
-    var showManageDialog by remember(movie.id) {
-        mutableStateOf(false)
-    }
-    var showRatingDialog by remember(movie.id) {
-        mutableStateOf(false)
-    }
-    var showCommentDialog by remember(movie.id) {
-        mutableStateOf(false)
-    }
-
-    val applicationContext = LocalContext.current.applicationContext
-    val coroutineScope = rememberCoroutineScope()
-
     Column(modifier = Modifier.fillMaxWidth()) {
         Card(
             onClick = onClick,
@@ -259,178 +226,9 @@ private fun MoviePosterTile(
                     modifier = Modifier.padding(6.dp)
                 )
 
-                Text(
-                    text = "•••",
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.65f))
-                        .clickable {
-                            showManageDialog = true
-                        }
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
 
         MediaCardTitle(title = movie.title)
     }
-
-    if (showManageDialog) {
-        MovieManageDialog(
-            movie = movie,
-            onChangeRating = {
-                showManageDialog = false
-                showRatingDialog = true
-            },
-            onChangeComment = {
-                showManageDialog = false
-                showCommentDialog = true
-            },
-            onRemove = {
-                onRemoveMovie()
-                showManageDialog = false
-            },
-            onCancel = {
-                showManageDialog = false
-            }
-        )
-    }
-
-    if (showCommentDialog) {
-        MovieCommentDialog(
-            movie = movie,
-            onSave = { comment ->
-                coroutineScope.launch {
-                    PhilsOsophyDatabase
-                        .getInstance(applicationContext)
-                        .savedMovieDao()
-                        .updateNote(
-                            movieId = movie.id,
-                            note = comment.trim()
-                        )
-                }
-                showCommentDialog = false
-            },
-            onCancel = {
-                showCommentDialog = false
-            }
-        )
-    }
-
-    if (showRatingDialog) {
-        UserRatingDialog(
-            title = "Rate ${movie.title}",
-            initialRating = movie.userRating,
-            onSave = { rating ->
-                onChangeRating(rating)
-                showRatingDialog = false
-            },
-            onCancel = {
-                showRatingDialog = false
-            }
-        )
-    }
-}
-
-@Composable
-private fun MovieManageDialog(
-    movie: SavedMovieEntity,
-    onChangeRating: () -> Unit,
-    onChangeComment: () -> Unit,
-    onRemove: () -> Unit,
-    onCancel: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(movie.title) },
-        text = {
-            Column {
-                Text(
-                    text = if (movie.userRating in 1..USER_RATING_MAX) {
-                        "Your rating: ${movie.userRating} / $USER_RATING_MAX"
-                    } else {
-                        "Not rated"
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onChangeRating) {
-                    Text(
-                        if (movie.userRating in 1..USER_RATING_MAX) {
-                            "Change rating"
-                        } else {
-                            "Add rating"
-                        }
-                    )
-                }
-                TextButton(onClick = onChangeComment) {
-                    Text(
-                        if (movie.note.isBlank()) {
-                            "Add comment"
-                        } else {
-                            "Edit comment"
-                        }
-                    )
-                }
-                TextButton(onClick = onRemove) {
-                    Text(
-                        text = "Remove movie",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onCancel) {
-                Text("Close")
-            }
-        }
-    )
-}
-
-@Composable
-private fun MovieCommentDialog(
-    movie: SavedMovieEntity,
-    onSave: (String) -> Unit,
-    onCancel: () -> Unit
-) {
-    var comment by remember(movie.id, movie.note) {
-        mutableStateOf(movie.note)
-    }
-
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = {
-            Text(
-                if (movie.note.isBlank()) {
-                    "Add comment"
-                } else {
-                    "Edit comment"
-                }
-            )
-        },
-        text = {
-            OutlinedTextField(
-                value = comment,
-                onValueChange = { comment = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Comment") },
-                minLines = 3,
-                maxLines = 6
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onSave(comment.trim()) }) {
-                Text("Save")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text("Cancel")
-            }
-        }
-    )
 }

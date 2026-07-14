@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.local.SeriesStatus
@@ -77,10 +76,7 @@ fun SeriesLibraryScreen(
     stoppedSeries: List<SavedSeriesEntity>,
     onAddSeries: (SeriesDto, SeriesStatus) -> Unit,
     onSeriesClick: (Int) -> Unit,
-    onStatusChange: (seriesId: Int, status: SeriesStatus) -> Unit,
     onFavoriteClick: (seriesId: Int, isFavorite: Boolean) -> Unit,
-    onChangeRating: (seriesId: Int, rating: Int) -> Unit,
-    onRemoveSeries: (seriesId: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
@@ -95,22 +91,7 @@ fun SeriesLibraryScreen(
     var isSearchBarVisible by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var pendingSeries by remember { mutableStateOf<SeriesDto?>(null) }
-    var managedSeries by remember {
-        mutableStateOf<SavedSeriesEntity?>(null)
-    }
-    var ratingSeries by remember {
-        mutableStateOf<SavedSeriesEntity?>(null)
-    }
-    var commentSeries by remember {
-        mutableStateOf<SavedSeriesEntity?>(null)
-    }
-
     val applicationContext = LocalContext.current.applicationContext
-    val savedSeriesDao = remember(applicationContext) {
-        PhilsOsophyDatabase
-            .getInstance(applicationContext)
-            .savedSeriesDao()
-    }
     val completionTracker = remember(applicationContext) {
         SeriesCompletionTracker(applicationContext)
     }
@@ -278,8 +259,7 @@ fun SeriesLibraryScreen(
                         title = "En cours",
                         series = filtered(inProgressSeries),
                         onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series -> managedSeries = series }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -287,8 +267,7 @@ fun SeriesLibraryScreen(
                         title = "Séries terminées",
                         series = filtered(finishedSeries),
                         onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series -> managedSeries = series }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -296,8 +275,7 @@ fun SeriesLibraryScreen(
                         title = "Séries à regarder",
                         series = filtered(toWatchSeries),
                         onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series -> managedSeries = series }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
                 item {
@@ -305,8 +283,7 @@ fun SeriesLibraryScreen(
                         title = "Séries arrêtées",
                         series = filtered(stoppedSeries),
                         onSeriesClick = onSeriesClick,
-                        onFavoriteClick = onFavoriteClick,
-                        onManageClick = { series -> managedSeries = series }
+                        onFavoriteClick = onFavoriteClick
                     )
                 }
             }
@@ -375,67 +352,6 @@ fun SeriesLibraryScreen(
         )
     }
 
-    managedSeries?.let { series ->
-        LibraryManageDialog(
-            series = series,
-            onStatusChange = { status ->
-                onStatusChange(series.id, status)
-                markFinishedEpisodes(
-                    seriesId = series.id,
-                    status = status
-                )
-                managedSeries = null
-            },
-            onChangeRating = {
-                ratingSeries = series
-                managedSeries = null
-            },
-            onChangeComment = {
-                commentSeries = series
-                managedSeries = null
-            },
-            onRemove = {
-                onRemoveSeries(series.id)
-                managedSeries = null
-            },
-            onCancel = {
-                managedSeries = null
-            }
-        )
-    }
-
-    ratingSeries?.let { series ->
-        UserRatingDialog(
-            title = "Rate ${series.name}",
-            initialRating = series.userRating,
-            onSave = { rating ->
-                onChangeRating(series.id, rating)
-                ratingSeries = null
-            },
-            onCancel = {
-                ratingSeries = null
-            }
-        )
-    }
-
-    commentSeries?.let { series ->
-        MediaCommentDialog(
-            mediaKey = series.id,
-            initialComment = series.note,
-            onSave = { comment ->
-                coroutineScope.launch {
-                    savedSeriesDao.updateNote(
-                        seriesId = series.id,
-                        note = comment
-                    )
-                }
-                commentSeries = null
-            },
-            onCancel = {
-                commentSeries = null
-            }
-        )
-    }
 }
 
 @Composable
@@ -446,8 +362,7 @@ private fun LibrarySection(
     onFavoriteClick: (
         seriesId: Int,
         isFavorite: Boolean
-    ) -> Unit,
-    onManageClick: (SavedSeriesEntity) -> Unit
+    ) -> Unit
 ) {
     var showFullList by remember(title) {
         mutableStateOf(false)
@@ -508,9 +423,6 @@ private fun LibrarySection(
                                         savedSeries.id,
                                         !savedSeries.isFavorite
                                     )
-                                },
-                                onManageClick = {
-                                    onManageClick(savedSeries)
                                 }
                             )
                         }
@@ -537,9 +449,6 @@ private fun LibrarySection(
                                 savedSeries.id,
                                 !savedSeries.isFavorite
                             )
-                        },
-                        onManageClick = {
-                            onManageClick(savedSeries)
                         }
                     )
                 }
@@ -552,8 +461,7 @@ private fun LibrarySection(
 private fun LibrarySeriesPoster(
     series: SavedSeriesEntity,
     onClick: () -> Unit,
-    onFavoriteClick: () -> Unit,
-    onManageClick: () -> Unit
+    onFavoriteClick: () -> Unit
 ) {
     val posterUrl = series.posterPath
         ?.takeIf { path -> path.isNotBlank() }
@@ -635,20 +543,6 @@ private fun LibrarySeriesPoster(
                     starSize = 20.sp
                 )
 
-                Text(
-                    text = "•••",
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.65f),
-                            shape = RoundedCornerShape(50)
-                        )
-                        .clickable(onClick = onManageClick)
-                        .padding(horizontal = 7.dp, vertical = 3.dp),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
             }
         }
 
@@ -751,72 +645,6 @@ private fun LibraryAddDialog(
         confirmButton = {
             Button(onClick = { onAdd(selectedStatus) }) {
                 Text("Add")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
-private fun LibraryManageDialog(
-    series: SavedSeriesEntity,
-    onStatusChange: (SeriesStatus) -> Unit,
-    onChangeRating: () -> Unit,
-    onChangeComment: () -> Unit,
-    onRemove: () -> Unit,
-    onCancel: () -> Unit
-) {
-    var selectedStatus by remember(series.id, series.status) {
-        mutableStateOf(SeriesStatus.fromStorage(series.status))
-    }
-
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(series.name) },
-        text = {
-            Column {
-                Text("Move to")
-                Spacer(modifier = Modifier.height(8.dp))
-                LibraryStatusChoices(
-                    selectedStatus = selectedStatus,
-                    onStatusSelected = { status ->
-                        selectedStatus = status
-                    }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                TextButton(onClick = onChangeRating) {
-                    Text(
-                        if (series.userRating in 1..USER_RATING_MAX) {
-                            "Change rating"
-                        } else {
-                            "Add rating"
-                        }
-                    )
-                }
-                TextButton(onClick = onChangeComment) {
-                    Text(
-                        if (series.note.isBlank()) {
-                            "Add comment"
-                        } else {
-                            "Edit comment"
-                        }
-                    )
-                }
-                TextButton(onClick = onRemove) {
-                    Text(
-                        text = "Remove series",
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(onClick = { onStatusChange(selectedStatus) }) {
-                Text("Save")
             }
         },
         dismissButton = {

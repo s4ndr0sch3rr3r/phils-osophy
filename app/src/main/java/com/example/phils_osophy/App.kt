@@ -237,19 +237,6 @@ fun App() {
                             )
                         }
                     },
-                    onChangeRating = { movieId, rating ->
-                        coroutineScope.launch {
-                            savedMovieDao.updateRating(
-                                movieId = movieId,
-                                userRating = rating.coerceIn(0, USER_RATING_MAX)
-                            )
-                        }
-                    },
-                    onRemoveMovie = { movieId ->
-                        coroutineScope.launch {
-                            savedMovieDao.deleteById(movieId)
-                        }
-                    },
                     onBackClick = ::openMovies
                 )
             }
@@ -267,19 +254,6 @@ fun App() {
                                 movieId = movieId,
                                 isFavorite = isFavorite
                             )
-                        }
-                    },
-                    onChangeRating = { movieId, rating ->
-                        coroutineScope.launch {
-                            savedMovieDao.updateRating(
-                                movieId = movieId,
-                                userRating = rating.coerceIn(0, USER_RATING_MAX)
-                            )
-                        }
-                    },
-                    onRemoveMovie = { movieId ->
-                        coroutineScope.launch {
-                            savedMovieDao.deleteById(movieId)
                         }
                     },
                     onBackClick = ::openMovies
@@ -346,34 +320,12 @@ fun App() {
                         selectedEpisodeNumber = null
                         currentScreen = AppScreen.SeriesDetail
                     },
-                    onStatusChange = { seriesId, status ->
-                        coroutineScope.launch {
-                            savedSeriesDao.updateStatus(
-                                seriesId = seriesId,
-                                status = status.name
-                            )
-                        }
-                    },
                     onFavoriteClick = { seriesId, isFavorite ->
                         coroutineScope.launch {
                             savedSeriesDao.updateFavorite(
                                 seriesId = seriesId,
                                 isFavorite = isFavorite
                             )
-                        }
-                    },
-                    onChangeRating = { seriesId, rating ->
-                        coroutineScope.launch {
-                            savedSeriesDao.updateRating(
-                                seriesId = seriesId,
-                                userRating = rating.coerceIn(0, USER_RATING_MAX)
-                            )
-                        }
-                    },
-                    onRemoveSeries = { seriesId ->
-                        coroutineScope.launch {
-                            watchedEpisodeDao.deleteForSeries(seriesId)
-                            savedSeriesDao.deleteById(seriesId)
                         }
                     },
                     onBackClick = ::openMovies
@@ -397,6 +349,21 @@ fun App() {
                                     seriesId = selectedSeries.id,
                                     isFavorite = isFavorite
                                 )
+                            }
+                        },
+                        onStatusChange = { status ->
+                            coroutineScope.launch {
+                                savedSeriesDao.updateStatus(
+                                    seriesId = selectedSeries.id,
+                                    status = status.name
+                                )
+                            }
+                        },
+                        onRemoveSeries = {
+                            coroutineScope.launch {
+                                watchedEpisodeDao.deleteForSeries(selectedSeries.id)
+                                savedSeriesDao.deleteById(selectedSeries.id)
+                                openSeriesLibrary()
                             }
                         },
                         onChangeRating = { rating ->

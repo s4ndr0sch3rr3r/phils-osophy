@@ -185,7 +185,7 @@ fun MovieDetailScreen(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .statusBarsPadding()
-                    .padding(end = 8.dp, top = 8.dp)
+                    .padding(end = 66.dp, top = 20.dp)
             ) {
                 TextButton(
                     onClick = {

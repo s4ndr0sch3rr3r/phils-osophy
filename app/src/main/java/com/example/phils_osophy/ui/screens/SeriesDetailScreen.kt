@@ -18,10 +18,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -51,6 +54,7 @@ import coil3.request.crossfade
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedSeriesEntity
 import com.example.phils_osophy.data.local.SeriesCompletionTracker
+import com.example.phils_osophy.data.local.SeriesStatus
 import com.example.phils_osophy.data.local.WatchedEpisodeKey
 import com.example.phils_osophy.data.remote.EpisodeDto
 import com.example.phils_osophy.data.remote.SeasonDetailsDto
@@ -74,6 +78,8 @@ fun SeriesDetailScreen(
     watchedEpisodes: Set<WatchedEpisodeKey>,
     onBackClick: () -> Unit,
     onFavoriteClick: (Boolean) -> Unit,
+    onStatusChange: (SeriesStatus) -> Unit,
+    onRemoveSeries: () -> Unit,
     onChangeRating: (Int) -> Unit,
     onEpisodeClick: (
         seasonNumber: Int,
@@ -96,6 +102,9 @@ fun SeriesDetailScreen(
     }
     var selectedTab by remember(series.id) {
         mutableStateOf(0)
+    }
+    var showManageDialog by remember(series.id) {
+        mutableStateOf(false)
     }
     var expandedSeasonNumber by remember(series.id) {
         mutableStateOf<Int?>(null)
@@ -188,7 +197,8 @@ fun SeriesDetailScreen(
             imageUrl = imageUrl,
             isFavorite = series.isFavorite,
             onBackClick = onBackClick,
-            onFavoriteClick = onFavoriteClick
+            onFavoriteClick = onFavoriteClick,
+            onManageClick = { showManageDialog = true }
         )
 
         TabRow(selectedTabIndex = selectedTab) {
@@ -281,6 +291,25 @@ fun SeriesDetailScreen(
         }
     }
 
+    if (showManageDialog) {
+        SeriesDetailManageDialog(
+            series = series,
+            onSave = { status ->
+                onStatusChange(status)
+                if (status == SeriesStatus.FINISHED) {
+                    coroutineScope.launch {
+                        completionTracker.markAllEpisodesWatched(series.id)
+                    }
+                }
+                showManageDialog = false
+            },
+            onRemove = {
+                onRemoveSeries()
+                showManageDialog = false
+            },
+            onCancel = { showManageDialog = false }
+        )
+    }
 }
 
 @Composable
@@ -290,7 +319,8 @@ private fun SeriesHero(
     imageUrl: String?,
     isFavorite: Boolean,
     onBackClick: () -> Unit,
-    onFavoriteClick: (Boolean) -> Unit
+    onFavoriteClick: (Boolean) -> Unit,
+    onManageClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -343,12 +373,27 @@ private fun SeriesHero(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .statusBarsPadding()
-                .padding(end = 8.dp, top = 8.dp)
+                .padding(end = 116.dp, top = 20.dp)
         ) {
             Text(
                 text = if (isFavorite) "♥" else "♡",
                 color = if (isFavorite) Color(0xFFE53935) else Color.White,
                 fontSize = 30.sp
+            )
+        }
+
+        TextButton(
+            onClick = onManageClick,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(end = 66.dp, top = 20.dp)
+        ) {
+            Text(
+                text = "•••",
+                color = Color.White,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
             )
         }
 
@@ -371,6 +416,68 @@ private fun SeriesHero(
             )
         }
     }
+}
+
+@Composable
+private fun SeriesDetailManageDialog(
+    series: SavedSeriesEntity,
+    onSave: (SeriesStatus) -> Unit,
+    onRemove: () -> Unit,
+    onCancel: () -> Unit
+) {
+    var selectedStatus by remember(series.id, series.status) {
+        mutableStateOf(SeriesStatus.fromStorage(series.status))
+    }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(series.name) },
+        text = {
+            Column {
+                Text("Move to")
+                Spacer(modifier = Modifier.height(8.dp))
+                SeriesStatus.values().forEach { status ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedStatus = status }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = status == selectedStatus,
+                            onClick = { selectedStatus = status }
+                        )
+                        Text(seriesStatusLabel(status))
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = onRemove) {
+                    Text(
+                        text = "Remove series",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onSave(selectedStatus) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+private fun seriesStatusLabel(status: SeriesStatus): String = when (status) {
+    SeriesStatus.IN_PROGRESS -> "En cours"
+    SeriesStatus.FINISHED -> "Séries terminées"
+    SeriesStatus.TO_WATCH -> "Séries à regarder"
+    SeriesStatus.STOPPED -> "Séries arrêtées"
 }
 
 @Composable

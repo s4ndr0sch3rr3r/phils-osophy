@@ -60,8 +60,6 @@ fun MovieSearchScreen(
     onAddMovie: (MovieDto) -> Unit,
     onMovieClick: (Int) -> Unit,
     onFavoriteClick: (movieId: Int, isFavorite: Boolean) -> Unit,
-    onChangeRating: (movieId: Int, rating: Int) -> Unit,
-    onRemoveMovie: (movieId: Int) -> Unit,
     onBackClick: () -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -233,8 +231,6 @@ fun MovieSearchScreen(
                 movies = visibleSavedMovies,
                 onMovieClick = onMovieClick,
                 onFavoriteClick = onFavoriteClick,
-                onChangeRating = onChangeRating,
-                onRemoveMovie = onRemoveMovie,
                 emptyMessage = when {
                     showFavoritesOnly && hasSearched ->
                         "No favorite movies found."
