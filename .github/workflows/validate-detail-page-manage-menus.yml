@@ -1,0 +1,25 @@
+name: Validate detail page manage menus
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  assemble-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - name: Assemble debug
+        env:
+          TMDB_READ_TOKEN: validation-placeholder
+          RAWG_API_KEY: ''
+        run: ./gradlew :app:assembleDebug --stacktrace
