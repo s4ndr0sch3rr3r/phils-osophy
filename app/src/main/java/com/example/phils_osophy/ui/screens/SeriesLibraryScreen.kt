@@ -61,6 +61,7 @@ import com.example.phils_osophy.data.local.SeriesCompletionTracker
 import com.example.phils_osophy.data.local.SeriesStatus
 import com.example.phils_osophy.data.remote.SeriesDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import kotlinx.coroutines.launch
 
 private const val TMDB_LIBRARY_POSTER_BASE_URL =
@@ -196,14 +197,11 @@ fun SeriesLibraryScreen(
                     resetSearch()
                 }
             ) {
-                Text(
-                    text = if (showFavoritesOnly) "♥" else "♡",
-                    color = if (showFavoritesOnly) {
-                        LibraryFavoriteColor
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    fontSize = 30.sp
+                FavoriteIcon(
+                    isFavorite = showFavoritesOnly,
+                    size = 30.dp,
+                    activeColor = LibraryFavoriteColor,
+                    inactiveColor = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -518,8 +516,8 @@ private fun LibrarySeriesPoster(
                     )
                 }
 
-                Text(
-                    text = if (series.isFavorite) "♥" else "♡",
+                FavoriteIcon(
+                    isFavorite = series.isFavorite,
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp)
@@ -529,12 +527,9 @@ private fun LibrarySeriesPoster(
                         )
                         .clickable(onClick = onFavoriteClick)
                         .padding(horizontal = 7.dp, vertical = 3.dp),
-                    color = if (series.isFavorite) {
-                        LibraryFavoriteColor
-                    } else {
-                        Color.White
-                    },
-                    fontSize = 20.sp
+                    size = 20.dp,
+                    activeColor = LibraryFavoriteColor,
+                    inactiveColor = Color.White
                 )
 
                 UserRatingBadge(

@@ -61,6 +61,7 @@ import com.example.phils_osophy.data.remote.SeasonDetailsDto
 import com.example.phils_osophy.data.remote.SeasonSummaryDto
 import com.example.phils_osophy.data.remote.SeriesDetailsDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import com.example.phils_osophy.ui.util.formatStoredDate
 import kotlinx.coroutines.launch
 
@@ -375,10 +376,11 @@ private fun SeriesHero(
                 .statusBarsPadding()
                 .padding(end = 116.dp, top = 20.dp)
         ) {
-            Text(
-                text = if (isFavorite) "♥" else "♡",
-                color = if (isFavorite) Color(0xFFE53935) else Color.White,
-                fontSize = 30.sp
+            FavoriteIcon(
+                isFavorite = isFavorite,
+                size = 30.dp,
+                activeColor = Color(0xFFE53935),
+                inactiveColor = Color.White
             )
         }
 

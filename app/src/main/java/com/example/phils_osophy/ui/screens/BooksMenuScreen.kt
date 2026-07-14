@@ -66,6 +66,7 @@ import com.example.phils_osophy.data.local.SavedBookEntity
 import com.example.phils_osophy.data.local.toSavedBookEntity
 import com.example.phils_osophy.data.remote.BookDto
 import com.example.phils_osophy.data.remote.OpenLibraryClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import com.example.phils_osophy.ui.util.formatStoredDate
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -346,14 +347,11 @@ private fun BookLibraryScreen(
                     resetSearch()
                 }
             ) {
-                Text(
-                    text = if (showFavoritesOnly) "♥" else "♡",
-                    color = if (showFavoritesOnly) {
-                        BookFavoriteColor
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                    fontSize = 30.sp
+                FavoriteIcon(
+                    isFavorite = showFavoritesOnly,
+                    size = 30.dp,
+                    activeColor = BookFavoriteColor,
+                    inactiveColor = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -582,18 +580,15 @@ private fun SavedBookCard(
                 title = book.title,
                 modifier = Modifier.fillMaxSize()
             )
-            Text(
-                text = if (book.isFavorite) "♥" else "♡",
+            FavoriteIcon(
+                isFavorite = book.isFavorite,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(6.dp)
                     .clickable(onClick = onFavoriteClick),
-                color = if (book.isFavorite) {
-                    BookFavoriteColor
-                } else {
-                    Color.White
-                },
-                fontSize = 26.sp
+                size = 26.dp,
+                activeColor = BookFavoriteColor,
+                inactiveColor = Color.White
             )
             UserRatingBadge(
                 rating = book.userRating,
@@ -996,14 +991,11 @@ private fun BookDetailScreen(
                 .statusBarsPadding()
                 .padding(end = 116.dp, top = 20.dp)
         ) {
-            Text(
-                text = if (book.isFavorite) "♥" else "♡",
-                color = if (book.isFavorite) {
-                    BookFavoriteColor
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
-                fontSize = 30.sp
+            FavoriteIcon(
+                isFavorite = book.isFavorite,
+                size = 30.dp,
+                activeColor = BookFavoriteColor,
+                inactiveColor = MaterialTheme.colorScheme.onSurface
             )
         }
 
