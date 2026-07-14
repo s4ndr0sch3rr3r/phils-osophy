@@ -195,6 +195,8 @@ fun SeriesDetailScreen(
         SeriesHero(
             title = title,
             subtitle = seriesSubtitle(details),
+            firstAired = seriesFirstAired(details, series),
+            tmdbRating = seriesTmdbRating(details, series),
             imageUrl = imageUrl,
             isFavorite = series.isFavorite,
             onBackClick = onBackClick,
@@ -317,6 +319,8 @@ fun SeriesDetailScreen(
 private fun SeriesHero(
     title: String,
     subtitle: String,
+    firstAired: String,
+    tmdbRating: String,
     imageUrl: String?,
     isFavorite: Boolean,
     onBackClick: () -> Unit,
@@ -413,6 +417,12 @@ private fun SeriesHero(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = subtitle,
+                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "$firstAired • $tmdbRating",
                 color = Color.White,
                 style = MaterialTheme.typography.bodyLarge
             )
@@ -528,75 +538,22 @@ private fun SeriesInfoTab(
         item { HorizontalDivider() }
 
         item {
-            DetailValue(
-                label = "First aired",
-                value = details
-                    ?.firstAirDate
-                    ?.takeIf { date -> date.isNotBlank() }
-                    ?: series.firstAirDate.ifBlank { "Unknown" }
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Rating",
-                value = details
-                    ?.voteAverage
-                    ?.takeIf { rating -> rating > 0.0 }
-                    ?.let { rating -> "%.1f / 10".format(rating) }
-                    ?: if (series.voteAverage > 0.0) {
-                        "%.1f / 10".format(series.voteAverage)
-                    } else {
-                        "Not rated"
-                    }
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Seasons",
-                value = details
-                    ?.numberOfSeasons
-                    ?.takeIf { count -> count > 0 }
-                    ?.toString()
-                    ?: "Unknown"
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Episodes",
-                value = details
+            CompactSeriesInfo(
+                episodeCount = details
                     ?.numberOfEpisodes
                     ?.takeIf { count -> count > 0 }
                     ?.toString()
-                    ?: "Unknown"
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Added to app",
-                value = formatStoredDate(series.addedAtEpochMillis)
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Completed",
-                value = completedAtEpochMillis
+                    ?: "Unknown",
+                addedAt = formatStoredDate(series.addedAtEpochMillis),
+                completedAt = completedAtEpochMillis
                     ?.let(::formatStoredDate)
-                    ?: "Not completed"
-            )
-        }
-
-        item {
-            DetailValue(
-                label = "Status",
-                value = details
+                    ?: "Not completed",
+                status = details
                     ?.status
                     ?.takeIf { status -> status.isNotBlank() }
-                    ?: "Unknown"
+                    ?: seriesStatusLabel(
+                        SeriesStatus.fromStorage(series.status)
+                    )
             )
         }
 
@@ -614,20 +571,64 @@ private fun SeriesInfoTab(
 }
 
 @Composable
-private fun DetailValue(
-    label: String,
-    value: String
+private fun CompactSeriesInfo(
+    episodeCount: String,
+    addedAt: String,
+    completedAt: String,
+    status: String
 ) {
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CompactDetailValue(
+                label = "Episodes",
+                value = episodeCount,
+                modifier = Modifier.weight(1f)
+            )
+            CompactDetailValue(
+                label = "Added",
+                value = addedAt,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            CompactDetailValue(
+                label = "Completed",
+                value = completedAt,
+                modifier = Modifier.weight(1f)
+            )
+            CompactDetailValue(
+                label = "Status",
+                value = status,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun CompactDetailValue(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelLarge,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(2.dp))
         Text(
             text = value,
-            style = MaterialTheme.typography.titleMedium
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -1006,3 +1007,24 @@ private fun seriesSubtitle(details: SeriesDetailsDto?): String {
         "$seasons • $genres"
     }
 }
+
+private fun seriesFirstAired(
+    details: SeriesDetailsDto?,
+    series: SavedSeriesEntity
+): String = details
+    ?.firstAirDate
+    ?.takeIf { date -> date.isNotBlank() }
+    ?: series.firstAirDate.ifBlank { "Unknown release date" }
+
+private fun seriesTmdbRating(
+    details: SeriesDetailsDto?,
+    series: SavedSeriesEntity
+): String = details
+    ?.voteAverage
+    ?.takeIf { rating -> rating > 0.0 }
+    ?.let { rating -> "%.1f / 10".format(rating) }
+    ?: if (series.voteAverage > 0.0) {
+        "%.1f / 10".format(series.voteAverage)
+    } else {
+        "Not rated"
+    }
