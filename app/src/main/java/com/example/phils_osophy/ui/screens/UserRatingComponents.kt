@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -40,19 +41,33 @@ fun BoxScope.UserRatingBadge(
 ) {
     if (rating !in 1..USER_RATING_MAX) return
 
-    Text(
-        text = "★",
+    val ratingTextSize = if (starSize.value <= 20f) 8.sp else 10.sp
+
+    Box(
         modifier = Modifier
             .align(Alignment.TopEnd)
             .then(modifier)
+            .offset(y = (-3).dp)
             .semantics {
                 contentDescription =
                     "User rating: $rating out of $USER_RATING_MAX"
             },
-        color = SelectedRatingStarColor,
-        fontSize = starSize,
-        fontWeight = FontWeight.Bold
-    )
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "★",
+            color = SelectedRatingStarColor,
+            fontSize = starSize,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = rating.toString(),
+            modifier = Modifier.offset(y = (-1).dp),
+            color = Color.Black,
+            fontSize = ratingTextSize,
+            fontWeight = FontWeight.Black
+        )
+    }
 }
 
 @Composable
