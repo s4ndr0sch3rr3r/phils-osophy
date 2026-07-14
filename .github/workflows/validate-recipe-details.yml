@@ -32,13 +32,28 @@ jobs:
       - name: Apply Recipe detail integration
         run: |
           python tools/apply_recipe_details.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt")
+          text = path.read_text()
+          text = text.replace(
+              "import androidx.compose.ui.relocation.BringIntoViewRequester\n",
+              "import androidx.compose.foundation.relocation.BringIntoViewRequester\n"
+          )
+          text = text.replace(
+              "import androidx.compose.ui.relocation.bringIntoViewRequester\n",
+              "import androidx.compose.foundation.relocation.bringIntoViewRequester\n"
+          )
+          path.write_text(text)
+          PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add app/src/main/java/com/example/phils_osophy/App.kt
           git add app/src/main/java/com/example/phils_osophy/data/local/PhilsOsophyDatabase.kt
           git add app/src/main/java/com/example/phils_osophy/ui/screens/RecipeLibraryScreen.kt
+          git add app/src/main/java/com/example/phils_osophy/ui/screens/RecipeDetailScreen.kt
           if ! git diff --cached --quiet; then
-            git commit -m "Integrate Recipe detail navigation and persistence"
+            git commit -m "Fix Recipe detail keyboard visibility imports"
             git push
           fi
 
