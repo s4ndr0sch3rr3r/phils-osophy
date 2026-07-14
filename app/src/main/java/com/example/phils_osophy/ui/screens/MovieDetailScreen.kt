@@ -14,13 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -75,10 +73,6 @@ fun MovieDetailScreen(
     var isMenuExpanded by remember {
         mutableStateOf(false)
     }
-    var comment by remember(movie.id, movie.note) {
-        mutableStateOf(movie.note)
-    }
-
     val applicationContext = LocalContext.current.applicationContext
     val coroutineScope = rememberCoroutineScope()
 
@@ -329,47 +323,22 @@ fun MovieDetailScreen(
 
         HorizontalDivider()
 
-        Column(
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Text(
-                text = "Your comment",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = comment,
-                onValueChange = { comment = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Comment") },
-                minLines = 3,
-                maxLines = 8
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            Button(
-                onClick = {
-                    val savedComment = comment.trim()
-                    comment = savedComment
-                    coroutineScope.launch {
-                        PhilsOsophyDatabase
-                            .getInstance(applicationContext)
-                            .savedMovieDao()
-                            .updateNote(
-                                movieId = movie.id,
-                                note = savedComment
-                            )
-                    }
-                },
-                enabled = comment.trim() != movie.note
-            ) {
-                Text("Save comment")
-            }
-        }
+        EditableMediaCommentSection(
+            mediaKey = movie.id,
+            savedComment = movie.note,
+            onSave = { savedComment ->
+                coroutineScope.launch {
+                    PhilsOsophyDatabase
+                        .getInstance(applicationContext)
+                        .savedMovieDao()
+                        .updateNote(
+                            movieId = movie.id,
+                            note = savedComment
+                        )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 
 }
