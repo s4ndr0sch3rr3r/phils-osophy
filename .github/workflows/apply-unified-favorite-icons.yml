@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/unified-favorite-icons
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
