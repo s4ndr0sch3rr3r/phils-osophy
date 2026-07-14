@@ -10,7 +10,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import com.example.phils_osophy.data.local.PhilsOsophyDatabase
+import com.example.phils_osophy.data.local.RecipeStatus
 import com.example.phils_osophy.data.local.SavedGameEntity
+import com.example.phils_osophy.data.local.createSavedRecipeEntity
 import com.example.phils_osophy.data.local.WatchedEpisodeEntity
 import com.example.phils_osophy.data.local.WatchedEpisodeKey
 import com.example.phils_osophy.data.local.toSavedMovieEntity
@@ -27,6 +29,7 @@ import com.example.phils_osophy.ui.screens.MovieDetailScreen
 import com.example.phils_osophy.ui.screens.MovieListScreen
 import com.example.phils_osophy.ui.screens.MovieSearchScreen
 import com.example.phils_osophy.ui.screens.ProfileScreen
+import com.example.phils_osophy.ui.screens.RecipeLibraryScreen
 import com.example.phils_osophy.ui.screens.SeriesDetailScreen
 import com.example.phils_osophy.ui.screens.SeriesLibraryScreen
 import com.example.phils_osophy.ui.screens.USER_RATING_MAX
@@ -72,6 +75,9 @@ fun App() {
     val savedBookDao = remember(database) {
         database.savedBookDao()
     }
+    val savedRecipeDao = remember(database) {
+        database.savedRecipeDao()
+    }
 
     val savedMoviesFlow = remember(savedMovieDao) {
         savedMovieDao.observeAll()
@@ -91,6 +97,34 @@ fun App() {
         savedBookDao.observeAll()
     }
     val savedBooks by savedBooksFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val inProgressRecipesFlow = remember(savedRecipeDao) {
+        savedRecipeDao.observeInProgress()
+    }
+    val inProgressRecipes by inProgressRecipesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val finishedRecipesFlow = remember(savedRecipeDao) {
+        savedRecipeDao.observeFinished()
+    }
+    val finishedRecipes by finishedRecipesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val toTryRecipesFlow = remember(savedRecipeDao) {
+        savedRecipeDao.observeToTry()
+    }
+    val toTryRecipes by toTryRecipesFlow.collectAsState(
+        initial = emptyList()
+    )
+
+    val stoppedRecipesFlow = remember(savedRecipeDao) {
+        savedRecipeDao.observeStopped()
+    }
+    val stoppedRecipes by stoppedRecipesFlow.collectAsState(
         initial = emptyList()
     )
 
@@ -201,7 +235,8 @@ fun App() {
             AppScreen.Explore,
             AppScreen.Profile,
             AppScreen.GamesMenu,
-            AppScreen.BooksMenu -> openMovies()
+            AppScreen.BooksMenu,
+            AppScreen.RecipesMenu -> openMovies()
 
             AppScreen.MoviesMenu -> Unit
         }
@@ -523,6 +558,47 @@ fun App() {
                     onAbandonedClick = {}
                 )
             }
+
+            AppScreen.RecipesMenu -> {
+                RecipeLibraryScreen(
+                    inProgressRecipes = inProgressRecipes,
+                    finishedRecipes = finishedRecipes,
+                    toTryRecipes = toTryRecipes,
+                    stoppedRecipes = stoppedRecipes,
+                    onAddRecipe = { title, status ->
+                        coroutineScope.launch {
+                            savedRecipeDao.insert(
+                                createSavedRecipeEntity(
+                                    title = title,
+                                    status = status
+                                )
+                            )
+                        }
+                    },
+                    onFavoriteClick = { recipeKey, isFavorite ->
+                        coroutineScope.launch {
+                            savedRecipeDao.updateFavorite(
+                                recipeKey = recipeKey,
+                                isFavorite = isFavorite
+                            )
+                        }
+                    },
+                    onStatusChange = { recipeKey, status ->
+                        coroutineScope.launch {
+                            savedRecipeDao.updateStatus(
+                                recipeKey = recipeKey,
+                                status = status.name
+                            )
+                        }
+                    },
+                    onRemoveRecipe = { recipeKey ->
+                        coroutineScope.launch {
+                            savedRecipeDao.deleteByKey(recipeKey)
+                        }
+                    },
+                    onBackClick = ::openMovies
+                )
+            }
         }
     }
 
@@ -556,16 +632,17 @@ private fun AppScreen.toBottomCategory(): BottomCategory? = when (this) {
     AppScreen.SeriesDetail,
     AppScreen.EpisodeDetail -> BottomCategory.Series
 
-    AppScreen.Explore -> BottomCategory.Explore
+    AppScreen.Explore,
     AppScreen.Profile -> null
     AppScreen.GamesMenu -> BottomCategory.Games
     AppScreen.BooksMenu -> BottomCategory.Books
+    AppScreen.RecipesMenu -> BottomCategory.Recipes
 }
 
 private fun BottomCategory.toAppScreen(): AppScreen = when (this) {
-    BottomCategory.Movies -> AppScreen.MoviesMenu
     BottomCategory.Series -> AppScreen.SeriesMenu
-    BottomCategory.Explore -> AppScreen.Explore
-    BottomCategory.Games -> AppScreen.GamesMenu
+    BottomCategory.Movies -> AppScreen.MoviesMenu
     BottomCategory.Books -> AppScreen.BooksMenu
+    BottomCategory.Recipes -> AppScreen.RecipesMenu
+    BottomCategory.Games -> AppScreen.GamesMenu
 }

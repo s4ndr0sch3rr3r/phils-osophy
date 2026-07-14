@@ -52,9 +52,11 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -95,6 +97,7 @@ fun ProfileScreen(
     var isRefreshingStatistics by remember { mutableStateOf(false) }
     var statisticsRefreshMessage by remember { mutableStateOf<String?>(null) }
     var statisticsRefreshToken by remember { mutableIntStateOf(0) }
+    var statisticsRefreshJob by remember { mutableStateOf<Job?>(null) }
     val watchedSeriesCount = remember(series, watchedEpisodes) {
         watchedEpisodeCountsByKnownSeries(
             series = series,
@@ -137,18 +140,19 @@ fun ProfileScreen(
         series,
         watchedEpisodes,
         games,
-        books,
         statisticsRefreshToken
     ) {
         if (!cacheLoaded) {
             return@LaunchedEffect
         }
 
-        delay(300)
+        val refreshJob = checkNotNull(currentCoroutineContext()[Job])
+        statisticsRefreshJob = refreshJob
         isRefreshingStatistics = true
         statisticsRefreshMessage = null
 
         try {
+            delay(300)
             val refreshedStatistics = calculateProfileTimeStats(
                 movies = movies,
                 series = series,
@@ -168,11 +172,16 @@ fun ProfileScreen(
             }
 
             statistics = completedSnapshot
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (_: Exception) {
             statisticsRefreshMessage =
                 "Refresh failed. Showing the last saved statistics."
         } finally {
-            isRefreshingStatistics = false
+            if (statisticsRefreshJob === refreshJob) {
+                statisticsRefreshJob = null
+                isRefreshingStatistics = false
+            }
         }
     }
 
@@ -224,13 +233,16 @@ fun ProfileScreen(
 
                 TextButton(
                     onClick = {
-                        statisticsRefreshToken += 1
-                    },
-                    enabled = !isRefreshingStatistics
+                        if (isRefreshingStatistics) {
+                            statisticsRefreshJob?.cancel()
+                        } else {
+                            statisticsRefreshToken += 1
+                        }
+                    }
                 ) {
                     Text(
                         if (isRefreshingStatistics) {
-                            "Updating…"
+                            "Stop"
                         } else {
                             "Refresh"
                         }
@@ -276,15 +288,6 @@ fun ProfileScreen(
                 title = "Games",
                 value = formatDuration(statistics.gameMinutes),
                 detail = "${statistics.gameCount} saved games · manually tracked playtime"
-            )
-        }
-
-        item {
-            ProfileTimeCard(
-                title = "Books",
-                value = "Time not tracked",
-                detail = "${statistics.finishedBookCount}/${statistics.bookCount} books finished. " +
-                    "Reading duration is not stored, so it is excluded from the total."
             )
         }
 
