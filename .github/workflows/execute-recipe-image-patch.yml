@@ -1,0 +1,120 @@
+name: Execute recipe image patch
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-build-clean:
+    if: github.head_ref == 'agent/recipe-image-search'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Execute corrected patch script
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import subprocess
+          import textwrap
+
+          workflow = Path(".github/workflows/apply-recipe-image-search-v2.yml").read_text().splitlines()
+          step_index = workflow.index("      - name: Apply Recipe UI integration")
+          run_index = workflow.index("        run: |", step_index)
+          end_index = next(
+              index for index in range(run_index + 1, len(workflow))
+              if workflow[index].startswith("      - name:")
+          )
+          script = textwrap.dedent("\n".join(workflow[run_index + 1:end_index]))
+
+          section_replacement = '''section_pattern = re.compile(
+              r'(?P<indent>[ \\t]+)onRecipeClick = onRecipeClick,\\n'
+              r'(?P=indent)onFavoriteClick = onFavoriteClick\\n'
+              r'(?P<close>[ \\t]+)\\)'
+          )
+          recipe, section_count = section_pattern.subn(
+              lambda match: (
+                  f"{match.group('indent')}onRecipeClick = onRecipeClick,\\n"
+                  f"{match.group('indent')}onFavoriteClick = onFavoriteClick,\\n"
+                  f"{match.group('indent')}imageUrls = recipeImageUrls,\\n"
+                  f"{match.group('indent')}imageLookupSemaphore = imageLookupSemaphore\\n"
+                  f"{match.group('close')})"
+              ),
+              recipe
+          )
+          if section_count != 4:
+              raise RuntimeError(f"Recipe section calls: expected four, found {section_count}")
+'''
+          script, count = re.subn(
+              r'''old_section_call = \(.*?recipe = recipe\.replace\(old_section_call, new_section_call\)\n''',
+              section_replacement,
+              script,
+              count=1,
+              flags=re.DOTALL
+          )
+          if count != 1:
+              raise RuntimeError(f"Could not correct section insertion: {count}")
+
+          card_replacement = '''card_pattern = re.compile(
+              r'(?P<indent>[ \\t]+)RecipeCard\\(\\n'
+              r'(?P<arg>[ \\t]+)recipe = recipe,\\n'
+          )
+          recipe, card_count = card_pattern.subn(
+              lambda match: (
+                  f"{match.group('indent')}RecipeCard(\\n"
+                  f"{match.group('arg')}recipe = recipe,\\n"
+                  f"{match.group('arg')}imageUrls = imageUrls,\\n"
+                  f"{match.group('arg')}imageLookupSemaphore = imageLookupSemaphore,\\n"
+              ),
+              recipe
+          )
+          if card_count != 2:
+              raise RuntimeError(f"Recipe card calls: expected two, found {card_count}")
+'''
+          script, count = re.subn(
+              r'''card_call = \(.*?recipe = recipe\.replace\(card_call, card_call_updated\)\n''',
+              card_replacement,
+              script,
+              count=1,
+              flags=re.DOTALL
+          )
+          if count != 1:
+              raise RuntimeError(f"Could not correct card insertion: {count}")
+
+          patch_script = Path("/tmp/apply_recipe_image_patch.py")
+          patch_script.write_text(script)
+          subprocess.run(["python", str(patch_script)], check=True)
+
+      - name: Run unit tests and build debug APK
+        env:
+          TMDB_READ_TOKEN: test-token
+          RAWG_API_KEY: test-key
+          MEALDB_API_KEY: '1'
+        run: bash gradlew :app:testDebugUnitTest :app:assembleDebug
+
+      - name: Commit validated changes
+        run: |
+          rm -f .github/workflows/apply-recipe-image-search.yml
+          rm -f .github/workflows/apply-recipe-image-search-v2.yml
+          rm -f .github/workflows/execute-recipe-image-patch.yml
+          rm -f .github/workflows/fix-recipe-image-v2.yml
+          rm -f recipe-image-patch-diagnostics.txt
+          rm -f recipe-image-v2-diagnostics.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Load matched images for Recipes"
+          git push origin HEAD:${{ github.head_ref }}
