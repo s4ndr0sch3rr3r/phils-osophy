@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedRecipeEntity::class,
         ProfileStatsCacheEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class PhilsOsophyDatabase : RoomDatabase() {
@@ -254,6 +254,31 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
             }
         }
 
+        private val migration14To15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE saved_recipes ADD COLUMN difficulty " +
+                        "TEXT NOT NULL DEFAULT ''"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_recipes ADD COLUMN prepTimeMinutes " +
+                        "INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_recipes ADD COLUMN totalTimeMinutes " +
+                        "INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_recipes ADD COLUMN ingredients " +
+                        "TEXT NOT NULL DEFAULT ''"
+                )
+                database.execSQL(
+                    "ALTER TABLE saved_recipes ADD COLUMN cookingSteps " +
+                        "TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
         fun getInstance(context: Context): PhilsOsophyDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -274,7 +299,8 @@ abstract class PhilsOsophyDatabase : RoomDatabase() {
                         migration10To11,
                         migration11To12,
                         migration12To13,
-                        migration13To14
+                        migration13To14,
+                        migration14To15
                     )
                     .build()
                     .also { database ->
