@@ -42,6 +42,10 @@ android {
             ?: providers.gradleProperty("RAWG_API_KEY").orNull
             ?: providers.environmentVariable("RAWG_API_KEY").orNull
             ?: ""
+        val mealDbApiKey = localProperties.getProperty("MEALDB_API_KEY")
+            ?: providers.gradleProperty("MEALDB_API_KEY").orNull
+            ?: providers.environmentVariable("MEALDB_API_KEY").orNull
+            ?: "1"
 
         buildConfigField(
             "String",
@@ -52,6 +56,11 @@ android {
             "String",
             "RAWG_API_KEY",
             rawgApiKey.toBuildConfigString()
+        )
+        buildConfigField(
+            "String",
+            "MEALDB_API_KEY",
+            mealDbApiKey.toBuildConfigString()
         )
     }
 

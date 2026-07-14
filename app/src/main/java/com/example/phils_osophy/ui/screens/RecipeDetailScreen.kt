@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -25,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,6 +50,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.example.phils_osophy.data.local.RecipeStatus
 import com.example.phils_osophy.data.local.SavedRecipeEntity
+import com.example.phils_osophy.data.remote.MealDbClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,8 +101,15 @@ fun RecipeDetailScreen(
         BringIntoViewRequester()
     }
     val coroutineScope = rememberCoroutineScope()
-    val imageUrl = remember(recipe.key) {
-        "https://picsum.photos/seed/recipe-${recipe.key.hashCode()}/1200/800"
+    var imageUrl by remember(recipe.key) { mutableStateOf<String?>(null) }
+    var isImageLoading by remember(recipe.key) { mutableStateOf(true) }
+
+    LaunchedEffect(recipe.key, recipe.title) {
+        isImageLoading = true
+        imageUrl = runCatching {
+            MealDbClient.findClosestMeal(recipe.title)?.thumbnailUrl
+        }.getOrNull()
+        isImageLoading = false
     }
 
     Column(
@@ -114,15 +124,35 @@ fun RecipeDetailScreen(
                 .fillMaxWidth()
                 .height(320.dp)
         ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(imageUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = "${recipe.title} image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            if (!imageUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "${recipe.title} image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isImageLoading) {
+                        CircularProgressIndicator()
+                    } else {
+                        Text(
+                            text = recipe.title,
+                            modifier = Modifier.padding(24.dp),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
 
             Box(
                 modifier = Modifier
