@@ -190,13 +190,17 @@ fun SeriesDetailScreen(
     val imageUrl = imagePath?.let { path ->
         "$TMDB_SERIES_BACKDROP_BASE_URL$path"
     }
+    val heroMetadataLines = seriesHeroMetadataLines(
+        details = details,
+        series = series,
+        watchedEpisodeCount = effectiveWatchedEpisodes.size,
+        completedAtEpochMillis = seriesCompletedAtEpochMillis
+    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         SeriesHero(
             title = title,
-            subtitle = seriesSubtitle(details),
-            firstAired = seriesFirstAired(details, series),
-            tmdbRating = seriesTmdbRating(details, series),
+            metadataLines = heroMetadataLines,
             imageUrl = imageUrl,
             isFavorite = series.isFavorite,
             onBackClick = onBackClick,
@@ -231,7 +235,6 @@ fun SeriesDetailScreen(
                 SeriesInfoTab(
                     series = series,
                     details = details,
-                    completedAtEpochMillis = seriesCompletedAtEpochMillis,
                     errorMessage = errorMessage,
                     onRatingChange = onChangeRating,
                     onSaveComment = { comment ->
@@ -318,9 +321,7 @@ fun SeriesDetailScreen(
 @Composable
 private fun SeriesHero(
     title: String,
-    subtitle: String,
-    firstAired: String,
-    tmdbRating: String,
+    metadataLines: List<String>,
     imageUrl: String?,
     isFavorite: Boolean,
     onBackClick: () -> Unit,
@@ -330,7 +331,7 @@ private fun SeriesHero(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(300.dp)
+            .height(420.dp)
     ) {
         if (imageUrl != null) {
             AsyncImage(
@@ -414,18 +415,18 @@ private fun SeriesHero(
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = subtitle,
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "$firstAired • $tmdbRating",
-                color = Color.White,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            metadataLines.forEachIndexed { index, line ->
+                Spacer(
+                    modifier = Modifier.height(
+                        if (index == 0) 8.dp else 4.dp
+                    )
+                )
+                Text(
+                    text = line,
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
         }
     }
 }
@@ -496,7 +497,6 @@ private fun seriesStatusLabel(status: SeriesStatus): String = when (status) {
 private fun SeriesInfoTab(
     series: SavedSeriesEntity,
     details: SeriesDetailsDto?,
-    completedAtEpochMillis: Long?,
     errorMessage: String?,
     onRatingChange: (Int) -> Unit,
     onSaveComment: (String) -> Unit
@@ -538,28 +538,6 @@ private fun SeriesInfoTab(
         item { HorizontalDivider() }
 
         item {
-            CompactSeriesInfo(
-                episodeCount = details
-                    ?.numberOfEpisodes
-                    ?.takeIf { count -> count > 0 }
-                    ?.toString()
-                    ?: "Unknown",
-                addedAt = formatStoredDate(series.addedAtEpochMillis),
-                completedAt = completedAtEpochMillis
-                    ?.let(::formatStoredDate)
-                    ?: "Not completed",
-                status = details
-                    ?.status
-                    ?.takeIf { status -> status.isNotBlank() }
-                    ?: seriesStatusLabel(
-                        SeriesStatus.fromStorage(series.status)
-                    )
-            )
-        }
-
-        item { HorizontalDivider() }
-
-        item {
             EditableMediaCommentSection(
                 mediaKey = series.id,
                 savedComment = series.note,
@@ -567,69 +545,6 @@ private fun SeriesInfoTab(
                 contentPadding = 0.dp
             )
         }
-    }
-}
-
-@Composable
-private fun CompactSeriesInfo(
-    episodeCount: String,
-    addedAt: String,
-    completedAt: String,
-    status: String
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CompactDetailValue(
-                label = "Episodes",
-                value = episodeCount,
-                modifier = Modifier.weight(1f)
-            )
-            CompactDetailValue(
-                label = "Added",
-                value = addedAt,
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            CompactDetailValue(
-                label = "Completed",
-                value = completedAt,
-                modifier = Modifier.weight(1f)
-            )
-            CompactDetailValue(
-                label = "Status",
-                value = status,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun CompactDetailValue(
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleSmall,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 
@@ -987,25 +902,56 @@ private fun seriesCompletionTimestamp(
     return completedDates.maxOrNull()
 }
 
-private fun seriesSubtitle(details: SeriesDetailsDto?): String {
-    if (details == null) {
-        return "Series information"
-    }
-
-    val seasons = when (details.numberOfSeasons) {
-        1 -> "1 season"
-        else -> "${details.numberOfSeasons} seasons"
-    }
-    val genres = details.genres
+private fun seriesHeroMetadataLines(
+    details: SeriesDetailsDto?,
+    series: SavedSeriesEntity,
+    watchedEpisodeCount: Int,
+    completedAtEpochMillis: Long?
+): List<String> {
+    val genres = details
+        ?.genres
+        .orEmpty()
         .map { genre -> genre.name }
         .filter { name -> name.isNotBlank() }
         .joinToString(", ")
-
-    return if (genres.isBlank()) {
-        seasons
-    } else {
-        "$seasons • $genres"
+        .ifBlank { "Unknown genre" }
+    val seasonCount = details
+        ?.numberOfSeasons
+        ?.takeIf { count -> count > 0 }
+    val seasons = when (seasonCount) {
+        1 -> "1 season"
+        null -> "Unknown seasons"
+        else -> "$seasonCount seasons"
     }
+    val totalEpisodeCount = details
+        ?.numberOfEpisodes
+        ?.takeIf { count -> count > 0 }
+    val episodes = when (totalEpisodeCount) {
+        1 -> "1 episode"
+        null -> "Unknown episodes"
+        else -> "$totalEpisodeCount episodes"
+    }
+    val normalizedWatchedCount = totalEpisodeCount
+        ?.let { total -> watchedEpisodeCount.coerceAtMost(total) }
+        ?: watchedEpisodeCount
+    val watched = totalEpisodeCount
+        ?.let { total -> "$normalizedWatchedCount/$total watched" }
+        ?: "$normalizedWatchedCount watched"
+    val completed = completedAtEpochMillis
+        ?.let { timestamp -> "Completed ${formatStoredDate(timestamp)}" }
+        ?: "Not completed"
+    val status = details
+        ?.status
+        ?.takeIf { value -> value.isNotBlank() }
+        ?: seriesStatusLabel(SeriesStatus.fromStorage(series.status))
+
+    return listOf(
+        "$genres • $seasons • $episodes",
+        "${seriesTmdbRating(details, series)} • Released ${seriesFirstAired(details, series)}",
+        watched,
+        "Added ${formatStoredDate(series.addedAtEpochMillis)}",
+        "$completed • $status"
+    )
 }
 
 private fun seriesFirstAired(
