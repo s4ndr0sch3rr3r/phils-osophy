@@ -1,16 +1,16 @@
 name: Validate local-first library search
 
 on:
-  push:
+  pull_request:
+    types: [opened]
     branches: [main]
-    paths:
-      - .github/workflows/run-local-first-search-validation.yml
 
 permissions:
   contents: write
 
 jobs:
   patch-build-and-commit:
+    if: github.head_ref == 'agent/local-first-library-search'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
