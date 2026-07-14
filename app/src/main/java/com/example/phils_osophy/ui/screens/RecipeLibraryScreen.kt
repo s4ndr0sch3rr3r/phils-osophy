@@ -140,7 +140,7 @@ fun RecipeLibraryScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Recipes",
+                text = "Recipes (${allRecipes.size})",
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineMedium
             )
