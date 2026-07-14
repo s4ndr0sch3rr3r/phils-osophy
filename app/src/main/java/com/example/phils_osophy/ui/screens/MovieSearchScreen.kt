@@ -18,20 +18,19 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +42,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -54,7 +52,7 @@ import com.example.phils_osophy.data.local.toMovieDto
 import com.example.phils_osophy.data.remote.MovieDto
 import com.example.phils_osophy.data.remote.TmdbClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 private const val TMDB_POSTER_BASE_URL =
     "https://image.tmdb.org/t/p/w342"
@@ -116,7 +114,6 @@ fun MovieSearchScreen(
         movie.id in savedMovieIds
     }
 
-    val coroutineScope = rememberCoroutineScope()
     val searchBarScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(
@@ -139,34 +136,37 @@ fun MovieSearchScreen(
         isLoading = false
     }
 
-    val searchMovies = {
+    LaunchedEffect(query, showFavoritesOnly) {
         val submittedQuery = query.trim()
 
-        if (submittedQuery.isNotEmpty() && !isLoading) {
-            errorMessage = null
-            hasSearched = true
+        if (submittedQuery.isBlank()) {
+            resetSearch()
+            return@LaunchedEffect
+        }
+
+        hasSearched = true
+        errorMessage = null
+        remoteMovies = emptyList()
+
+        if (showFavoritesOnly) {
+            isLoading = false
+            return@LaunchedEffect
+        }
+
+        isLoading = true
+        try {
+            remoteMovies = TmdbClient.api
+                .searchMovies(submittedQuery)
+                .results
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
             remoteMovies = emptyList()
-
-            if (!showFavoritesOnly) {
-                coroutineScope.launch {
-                    isLoading = true
-
-                    try {
-                        val results = TmdbClient.api
-                            .searchMovies(submittedQuery)
-                            .results
-                        if (query.trim() == submittedQuery) {
-                            remoteMovies = results
-                        }
-                    } catch (exception: Exception) {
-                        remoteMovies = emptyList()
-                        errorMessage =
-                            exception.localizedMessage
-                                ?: "Movie search failed."
-                    } finally {
-                        isLoading = false
-                    }
-                }
+            errorMessage = exception.localizedMessage
+                ?: "Movie search failed."
+        } finally {
+            if (query.trim() == submittedQuery && !showFavoritesOnly) {
+                isLoading = false
             }
         }
     }
@@ -212,48 +212,34 @@ fun MovieSearchScreen(
 
         AnimatedVisibility(visible = isSearchBarVisible) {
             Column {
-                Row(
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { newQuery ->
+                        query = newQuery
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { newQuery ->
-                            query = newQuery
-
-                            if (newQuery.isBlank()) {
-                                resetSearch()
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = {
-                            Text(
-                                if (showFavoritesOnly) {
-                                    "Search within favorites"
-                                } else {
-                                    "Search for a movie"
-                                }
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                searchMovies()
+                    label = {
+                        Text(
+                            if (showFavoritesOnly) {
+                                "Search within favorites"
+                            } else {
+                                "Search for a movie"
                             }
                         )
-                    )
-
-                    Button(
-                        onClick = searchMovies,
-                        enabled = query.isNotBlank() && !isLoading
-                    ) {
-                        Text("Search")
-                    }
-                }
+                    },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Text(
+                                    text = "×",
+                                    color = FavoriteColor,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
