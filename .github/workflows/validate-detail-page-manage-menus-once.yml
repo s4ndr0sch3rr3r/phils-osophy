@@ -27,7 +27,7 @@ jobs:
           RAWG_API_KEY: ''
         run: |
           set +e
-          ./gradlew :app:assembleDebug --stacktrace > /tmp/detail-menu-build.log 2>&1
+          bash ./gradlew :app:assembleDebug --stacktrace > /tmp/detail-menu-build.log 2>&1
           code=$?
           echo "$code" > .github/detail-menu-build-result.txt
           tail -n 250 /tmp/detail-menu-build.log > .github/detail-menu-build-log.txt
