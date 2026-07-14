@@ -22,13 +22,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +36,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -54,7 +54,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -68,6 +67,7 @@ import com.example.phils_osophy.data.remote.BookDto
 import com.example.phils_osophy.data.remote.OpenLibraryClient
 import com.example.phils_osophy.ui.components.FavoriteIcon
 import com.example.phils_osophy.ui.util.formatStoredDate
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -258,7 +258,6 @@ private fun BookLibraryScreen(
     val expandedBookSections = remember {
         mutableStateMapOf<String, Boolean>()
     }
-    val coroutineScope = rememberCoroutineScope()
     val searchBarScrollConnection = remember {
         object : NestedScrollConnection {
             override fun onPreScroll(
@@ -317,10 +316,12 @@ private fun BookLibraryScreen(
             !showFavoritesOnly || book.isFavorite
         }
 
-    fun searchBooks() {
+    LaunchedEffect(query, showFavoritesOnly) {
         val submittedQuery = query.trim()
-        if (submittedQuery.isBlank() || isLoading) {
-            return
+
+        if (submittedQuery.isBlank()) {
+            resetSearch()
+            return@LaunchedEffect
         }
 
         hasSearched = true
@@ -328,27 +329,27 @@ private fun BookLibraryScreen(
         remoteSearchResults = emptyList()
 
         if (showFavoritesOnly) {
-            return
+            isLoading = false
+            return@LaunchedEffect
         }
 
-        coroutineScope.launch {
-            isLoading = true
-            try {
-                val results = OpenLibraryClient.api
-                    .searchBooks(submittedQuery)
-                    .docs
-                    .filter { book ->
-                        book.key.isNotBlank() && book.title.isNotBlank()
-                    }
-                    .distinctBy { book -> book.key }
-                if (query.trim() == submittedQuery) {
-                    remoteSearchResults = results
+        isLoading = true
+        try {
+            remoteSearchResults = OpenLibraryClient.api
+                .searchBooks(submittedQuery)
+                .docs
+                .filter { book ->
+                    book.key.isNotBlank() && book.title.isNotBlank()
                 }
-            } catch (exception: Exception) {
-                remoteSearchResults = emptyList()
-                errorMessage = exception.localizedMessage
-                    ?: "Book search failed."
-            } finally {
+                .distinctBy { book -> book.key }
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            remoteSearchResults = emptyList()
+            errorMessage = exception.localizedMessage
+                ?: "Book search failed."
+        } finally {
+            if (query.trim() == submittedQuery && !showFavoritesOnly) {
                 isLoading = false
             }
         }
@@ -394,44 +395,34 @@ private fun BookLibraryScreen(
 
         AnimatedVisibility(visible = isSearchBarVisible) {
             Column {
-                Row(
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { newQuery ->
+                        query = newQuery
+                    },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { newQuery ->
-                            query = newQuery
-                            if (newQuery.isBlank()) {
-                                resetSearch()
+                    label = {
+                        Text(
+                            if (showFavoritesOnly) {
+                                "Search within favorites"
+                            } else {
+                                "Search for a book"
                             }
-                        },
-                        modifier = Modifier.weight(1f),
-                        label = {
-                            Text(
-                                if (showFavoritesOnly) {
-                                    "Search within favorites"
-                                } else {
-                                    "Search for a book"
-                                }
-                            )
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onSearch = { searchBooks() }
                         )
-                    )
-                    Button(
-                        onClick = { searchBooks() },
-                        enabled = query.isNotBlank() && !isLoading
-                    ) {
-                        Text("Search")
-                    }
-                }
+                    },
+                    trailingIcon = {
+                        if (query.isNotEmpty()) {
+                            IconButton(onClick = { query = "" }) {
+                                Text(
+                                    text = "×",
+                                    color = BookFavoriteColor,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true
+                )
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
