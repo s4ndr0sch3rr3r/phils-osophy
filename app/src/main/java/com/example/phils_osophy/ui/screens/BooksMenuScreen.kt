@@ -692,7 +692,6 @@ private fun BookAddDialog(
 private fun BookManageDialog(
     book: SavedBookEntity,
     onSave: (status: BookStatus, progress: Int) -> Unit,
-    onChangeRating: () -> Unit,
     onChangeComment: () -> Unit,
     onRemove: () -> Unit,
     onCancel: () -> Unit
@@ -761,15 +760,6 @@ private fun BookManageDialog(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-                TextButton(onClick = onChangeRating) {
-                    Text(
-                        if (book.userRating in 1..USER_RATING_MAX) {
-                            "Change rating"
-                        } else {
-                            "Add rating"
-                        }
-                    )
-                }
                 TextButton(onClick = onChangeComment) {
                     Text(
                         if (book.note.isBlank()) {
@@ -845,9 +835,6 @@ private fun BookDetailScreen(
     var showManageDialog by remember(book.key) {
         mutableStateOf(false)
     }
-    var showRatingDialog by remember(book.key) {
-        mutableStateOf(false)
-    }
     var showCommentDialog by remember(book.key) {
         mutableStateOf(false)
     }
@@ -873,15 +860,6 @@ private fun BookDetailScreen(
                     modifier = Modifier.weight(1f),
                     style = MaterialTheme.typography.headlineMedium
                 )
-                TextButton(onClick = { showRatingDialog = true }) {
-                    Text(
-                        if (book.userRating in 1..USER_RATING_MAX) {
-                            "${book.userRating}/$USER_RATING_MAX"
-                        } else {
-                            "Rate"
-                        }
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -928,6 +906,12 @@ private fun BookDetailScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     ReadingProgressBar(
                         progress = book.readingProgressPercent
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    InlineUserRatingStars(
+                        rating = book.userRating,
+                        onRatingChange = onChangeRating,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
                 item {
@@ -1021,10 +1005,6 @@ private fun BookDetailScreen(
                 onSaveReadingState(status, progress)
                 showManageDialog = false
             },
-            onChangeRating = {
-                showManageDialog = false
-                showRatingDialog = true
-            },
             onChangeComment = {
                 showManageDialog = false
                 showCommentDialog = true
@@ -1036,18 +1016,6 @@ private fun BookDetailScreen(
             onCancel = {
                 showManageDialog = false
             }
-        )
-    }
-
-    if (showRatingDialog) {
-        UserRatingDialog(
-            title = "Rate ${book.title}",
-            initialRating = book.userRating,
-            onSave = { rating ->
-                onChangeRating(rating)
-                showRatingDialog = false
-            },
-            onCancel = { showRatingDialog = false }
         )
     }
 

@@ -43,6 +43,7 @@ import com.example.phils_osophy.data.local.PhilsOsophyDatabase
 import com.example.phils_osophy.data.local.SavedMovieEntity
 import com.example.phils_osophy.data.remote.MovieDetailsDto
 import com.example.phils_osophy.data.remote.TmdbClient
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -181,6 +182,21 @@ fun MovieDetailScreen(
                 )
             }
 
+            TextButton(
+                onClick = { onFavoriteClick(!movie.isFavorite) },
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(end = 116.dp, top = 20.dp)
+            ) {
+                FavoriteIcon(
+                    isFavorite = movie.isFavorite,
+                    size = 30.dp,
+                    activeColor = Color(0xFFE53935),
+                    inactiveColor = Color.White
+                )
+            }
+
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -206,22 +222,6 @@ fun MovieDetailScreen(
                         isMenuExpanded = false
                     }
                 ) {
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                if (movie.isFavorite) {
-                                    "Remove favorite"
-                                } else {
-                                    "Favorite"
-                                }
-                            )
-                        },
-                        onClick = {
-                            isMenuExpanded = false
-                            onFavoriteClick(!movie.isFavorite)
-                        }
-                    )
-
                     DropdownMenuItem(
                         text = {
                             Text(
