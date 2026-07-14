@@ -6,6 +6,7 @@ on:
       - agent/lazy-expandable-library-sections
     paths:
       - tools/apply_lazy_library_sections.py
+      - .github/workflows/apply-lazy-library-sections.yml
 
 permissions:
   contents: write
