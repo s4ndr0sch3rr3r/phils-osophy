@@ -693,9 +693,7 @@ private fun SavedBookCard(
             )
             UserRatingBadge(
                 rating = book.userRating,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(6.dp)
+                modifier = Modifier.padding(6.dp)
             )
             Text(
                 text = "•••",

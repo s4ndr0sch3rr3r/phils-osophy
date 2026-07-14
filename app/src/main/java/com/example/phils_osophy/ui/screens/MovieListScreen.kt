@@ -256,9 +256,7 @@ private fun MoviePosterTile(
 
                 UserRatingBadge(
                     rating = movie.userRating,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                    modifier = Modifier.padding(6.dp)
                 )
 
                 Text(

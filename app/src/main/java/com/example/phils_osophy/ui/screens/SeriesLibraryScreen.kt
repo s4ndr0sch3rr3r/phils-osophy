@@ -631,9 +631,8 @@ private fun LibrarySeriesPoster(
 
                 UserRatingBadge(
                     rating = series.userRating,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
+                    modifier = Modifier.padding(6.dp),
+                    starSize = 20.sp
                 )
 
                 Text(
