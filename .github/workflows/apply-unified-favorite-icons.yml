@@ -22,12 +22,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply favorite icon update
-        run: python .github/scripts/apply_unified_favorite_icons.py
-      - name: Commit generated source changes
+      - name: Apply and record favorite icon update
         run: |
+          set +e
+          python .github/scripts/apply_unified_favorite_icons.py > .github/favorite-transform.log 2>&1
+          code=$?
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/src/main/java
-          git commit -m "Use matched favorite icons across the app"
+          git add app/src/main/java .github/favorite-transform.log
+          git commit -m "Record favorite icon transformation" || true
           git push origin HEAD:agent/unified-favorite-icons
+          exit $code
