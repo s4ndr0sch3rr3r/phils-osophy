@@ -847,7 +847,7 @@ private fun BookDetailScreen(
     onRemove: () -> Unit
 ) {
     BackHandler(onBack = onBackClick)
-    var showManageDialog by remember {
+    var showManageDialog by remember(book.key) {
         mutableStateOf(false)
     }
     var showRatingDialog by remember(book.key) {
@@ -865,119 +865,127 @@ private fun BookDetailScreen(
                 .navigationBarsPadding()
                 .padding(16.dp)
         ) {
-        TextButton(onClick = onBackClick) {
-            Text("← Back")
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Book details",
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineMedium
-            )
-            TextButton(onClick = { showRatingDialog = true }) {
-                Text(if (book.userRating in 1..USER_RATING_MAX) "${book.userRating}/$USER_RATING_MAX" else "Rate")
+            TextButton(onClick = onBackClick) {
+                Text("← Back")
             }
-        }
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            item {
-                BookCover(
-                    coverId = book.coverId,
-                    title = book.title,
-                    modifier = Modifier.size(width = 180.dp, height = 270.dp)
-                )
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    text = "Book details",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineMedium
                 )
-            }
-            if (book.authors.isNotBlank()) {
-                item {
-                    Spacer(modifier = Modifier.height(8.dp))
+                TextButton(onClick = { showRatingDialog = true }) {
                     Text(
-                        text = book.authors,
-                        style = MaterialTheme.typography.titleMedium
+                        if (book.userRating in 1..USER_RATING_MAX) {
+                            "${book.userRating}/$USER_RATING_MAX"
+                        } else {
+                            "Rate"
+                        }
                     )
                 }
             }
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
-                Text(
-                    text = "Reading progress: ${
-                        book.readingProgressPercent.coerceIn(0, 100)
-                    }%",
-                    modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                ReadingProgressBar(
-                    progress = book.readingProgressPercent
-                )
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                DetailLine(
-                    label = "Category",
-                    value = bookStatusLabel(
-                        BookStatus.fromStorage(book.status)
-                    )
-                )
-            }
-            book.firstPublishYear?.let { year ->
-                item {
-                    DetailLine(
-                        label = "First published",
-                        value = year.toString()
-                    )
-                }
-            }
-            item {
-                DetailLine(
-                    label = "Editions",
-                    value = book.editionCount.toString()
-                )
-            }
-            item {
-                DetailLine(
-                    label = "Date added",
-                    value = formatStoredDate(book.addedAtEpochMillis)
-                )
-            }
-            if (
-                book.readingProgressPercent >= 100 ||
-                BookStatus.fromStorage(book.status) == BookStatus.FINISHED
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                contentPadding = PaddingValues(bottom = 24.dp)
             ) {
                 item {
-                    DetailLine(
-                        label = "Finished reading",
-                        value = formatStoredDate(book.finishedAtEpochMillis)
+                    BookCover(
+                        coverId = book.coverId,
+                        title = book.title,
+                        modifier = Modifier.size(width = 180.dp, height = 270.dp)
                     )
                 }
-            }
-            item {
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider()
-                EditableMediaCommentSection(
-                    mediaKey = book.key,
-                    savedComment = book.note,
-                    onSave = onSaveComment,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = 0.dp
-                )
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Text(
+                        text = book.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                if (book.authors.isNotBlank()) {
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = book.authors,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        text = "Reading progress: ${
+                            book.readingProgressPercent.coerceIn(0, 100)
+                        }%",
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ReadingProgressBar(
+                        progress = book.readingProgressPercent
+                    )
+                }
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    DetailLine(
+                        label = "Category",
+                        value = bookStatusLabel(
+                            BookStatus.fromStorage(book.status)
+                        )
+                    )
+                }
+                book.firstPublishYear?.let { year ->
+                    item {
+                        DetailLine(
+                            label = "First published",
+                            value = year.toString()
+                        )
+                    }
+                }
+                item {
+                    DetailLine(
+                        label = "Editions",
+                        value = book.editionCount.toString()
+                    )
+                }
+                item {
+                    DetailLine(
+                        label = "Date added",
+                        value = formatStoredDate(book.addedAtEpochMillis)
+                    )
+                }
+                if (
+                    book.readingProgressPercent >= 100 ||
+                    BookStatus.fromStorage(book.status) == BookStatus.FINISHED
+                ) {
+                    item {
+                        DetailLine(
+                            label = "Finished reading",
+                            value = formatStoredDate(book.finishedAtEpochMillis)
+                        )
+                    }
+                }
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    HorizontalDivider()
+                    EditableMediaCommentSection(
+                        mediaKey = book.key,
+                        savedComment = book.note,
+                        onSave = onSaveComment,
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = 0.dp
+                    )
+                }
             }
         }
 
@@ -990,7 +998,11 @@ private fun BookDetailScreen(
         ) {
             Text(
                 text = if (book.isFavorite) "♥" else "♡",
-                color = if (book.isFavorite) BookFavoriteColor else MaterialTheme.colorScheme.onSurface,
+                color = if (book.isFavorite) {
+                    BookFavoriteColor
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
                 fontSize = 30.sp
             )
         }
