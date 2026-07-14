@@ -17,5 +17,7 @@ data class SavedGameEntity(
     @ColumnInfo(defaultValue = "0")
     val addedAtEpochMillis: Long = System.currentTimeMillis(),
     @ColumnInfo(defaultValue = "0")
-    val userRating: Int = 0
+    val userRating: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val isFavorite: Boolean = false
 )

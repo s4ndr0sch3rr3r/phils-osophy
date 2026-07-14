@@ -1,6 +1,7 @@
 package com.example.phils_osophy.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +25,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -42,9 +45,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -63,6 +70,7 @@ import com.example.phils_osophy.data.local.SavedGameEntity
 import com.example.phils_osophy.data.remote.RawgClient
 import com.example.phils_osophy.data.remote.RawgGameDetailsDto
 import com.example.phils_osophy.data.remote.RawgGameSummaryDto
+import com.example.phils_osophy.ui.components.FavoriteIcon
 import com.example.phils_osophy.ui.util.formatStoredDate
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -89,18 +97,38 @@ fun GameLibraryScreen(
         isFinished: Boolean
     ) -> Unit,
     onChangeRating: (gameId: Long, rating: Int) -> Unit,
+    onFavoriteClick: (gameId: Long, isFavorite: Boolean) -> Unit,
     onBackClick: () -> Unit
 ) {
-    var showAddDialog by remember {
-        mutableStateOf(false)
+    var query by remember { mutableStateOf("") }
+    var searchedQuery by remember { mutableStateOf<String?>(null) }
+    var searchResults by remember {
+        mutableStateOf<List<GameSearchResult>>(emptyList())
     }
-    var selectedGameId by remember {
-        mutableStateOf<Long?>(null)
-    }
+    var isSearching by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
+    var pendingGameName by remember { mutableStateOf<String?>(null) }
+    var showFavoritesOnly by remember { mutableStateOf(false) }
+    var isSearchBarVisible by remember { mutableStateOf(true) }
+    var selectedGameId by remember { mutableStateOf<Long?>(null) }
 
     val apiKey = BuildConfig.RAWG_API_KEY.trim()
     val rawgSummaries = remember {
         mutableStateMapOf<Long, RawgGameSummaryDto?>()
+    }
+    val searchBarScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                when {
+                    available.y < -2f -> isSearchBarVisible = false
+                    available.y > 2f -> isSearchBarVisible = true
+                }
+                return Offset.Zero
+            }
+        }
     }
 
     LaunchedEffect(
@@ -140,6 +168,51 @@ fun GameLibraryScreen(
         }
     }
 
+    LaunchedEffect(searchedQuery, apiKey) {
+        val activeQuery = searchedQuery ?: return@LaunchedEffect
+        val localResult = GameSearchResult(
+            key = "local:${activeQuery.lowercase(Locale.ROOT)}",
+            name = activeQuery,
+            imageUrl = null
+        )
+
+        isSearching = true
+        searchError = null
+
+        if (apiKey.isBlank()) {
+            searchResults = listOf(localResult)
+            isSearching = false
+            return@LaunchedEffect
+        }
+
+        try {
+            val remoteResults = RawgClient.api.searchGames(
+                apiKey = apiKey,
+                query = activeQuery,
+                pageSize = 12
+            ).results
+                .filter { result -> result.name.isNotBlank() }
+                .distinctBy { result ->
+                    result.name.trim().lowercase(Locale.ROOT)
+                }
+                .map { result ->
+                    GameSearchResult(
+                        key = "rawg:${result.id}",
+                        name = result.name.trim(),
+                        imageUrl = result.backgroundImage
+                    )
+                }
+
+            searchResults = remoteResults.ifEmpty { listOf(localResult) }
+        } catch (_: Exception) {
+            searchError =
+                "Game search could not be loaded. You can still add the entered title."
+            searchResults = listOf(localResult)
+        } finally {
+            isSearching = false
+        }
+    }
+
     val selectedGame = games.firstOrNull { game ->
         game.id == selectedGameId
     }
@@ -168,106 +241,207 @@ fun GameLibraryScreen(
 
     BackHandler(onBack = onBackClick)
 
+    val visibleGames = remember(games, showFavoritesOnly) {
+        games.filter { game ->
+            !showFavoritesOnly || game.isFavorite
+        }
+    }
+    val savedGameNames = remember(games) {
+        games.map { game ->
+            game.name.trim().lowercase(Locale.ROOT)
+        }.toSet()
+    }
+
+    fun performSearch() {
+        searchedQuery = query
+            .trim()
+            .replace(Regex("\\s+"), " ")
+            .takeIf { value -> value.isNotBlank() }
+    }
+
+    fun resetSearch() {
+        searchedQuery = null
+        searchResults = emptyList()
+        searchError = null
+        isSearching = false
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .nestedScroll(searchBarScrollConnection)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(16.dp)
     ) {
-        Text(
-            text = "Games (${games.size})",
-            style = MaterialTheme.typography.headlineMedium
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(end = 66.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Games (${games.size})",
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineMedium
+            )
+            TextButton(
+                onClick = {
+                    showFavoritesOnly = !showFavoritesOnly
+                    query = ""
+                    isSearchBarVisible = true
+                    resetSearch()
+                }
+            ) {
+                FavoriteIcon(
+                    isFavorite = showFavoritesOnly,
+                    size = 30.dp,
+                    activeColor = Color(0xFFE53935),
+                    inactiveColor = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        OutlinedCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    showAddDialog = true
+        AnimatedVisibility(visible = isSearchBarVisible) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = query,
+                        onValueChange = { newQuery ->
+                            query = newQuery
+                            if (newQuery.isBlank()) {
+                                resetSearch()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("Search for a game") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Search
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { performSearch() }
+                        )
+                    )
+                    Button(
+                        onClick = { performSearch() },
+                        enabled = query.isNotBlank() && !isSearching
+                    ) {
+                        Text("Search")
+                    }
                 }
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = 16.dp,
-                        vertical = 14.dp
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Add a game",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleMedium
-                )
-
-                Text(
-                    text = "+",
-                    fontSize = 30.sp,
-                    fontWeight = FontWeight.Light
-                )
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        if (searchedQuery == null) {
+            when {
+                visibleGames.isEmpty() -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            if (showFavoritesOnly) {
+                                "No favorite games."
+                            } else {
+                                "No games added yet."
+                            }
+                        )
+                    }
+                }
 
-        Text(
-            text = "My games",
-            style = MaterialTheme.typography.titleLarge
-        )
-
-        if (apiKey.isBlank()) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Add RAWG_API_KEY to local.properties to load game images.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        if (games.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("No games added yet.")
+                else -> {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentPadding = PaddingValues(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(
+                            items = visibleGames,
+                            key = { game -> game.id }
+                        ) { game ->
+                            GamePosterCard(
+                                game = game,
+                                imageUrl = rawgSummaries[game.id]
+                                    ?.backgroundImage,
+                                onClick = {
+                                    selectedGameId = game.id
+                                },
+                                onFavoriteClick = {
+                                    onFavoriteClick(
+                                        game.id,
+                                        !game.isFavorite
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(bottom = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(
-                    items = games,
-                    key = { game -> game.id }
-                ) { game ->
-                    GamePosterCard(
-                        game = game,
-                        imageUrl = rawgSummaries[game.id]
-                            ?.backgroundImage,
-                        onClick = {
-                            selectedGameId = game.id
+                if (isSearching) {
+                    item(key = "game-search-loading") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(96.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
                         }
-                    )
+                    }
+                }
+
+                searchError?.let { message ->
+                    item(key = "game-search-error") {
+                        Text(
+                            text = message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
+                searchResults.forEach { result ->
+                    item(key = result.key) {
+                        GameSearchResultCard(
+                            result = result,
+                            isAdded = result.name
+                                .trim()
+                                .lowercase(Locale.ROOT) in savedGameNames,
+                            onAddClick = {
+                                pendingGameName = result.name
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 
-    if (showAddDialog) {
+    pendingGameName?.let { initialName ->
         AddGameDialog(
+            initialName = initialName,
             onAdd = {
                     name,
                     hoursPlayedMinutes,
@@ -279,12 +453,69 @@ fun GameLibraryScreen(
                     playerCount,
                     isFinished
                 )
-                showAddDialog = false
+                pendingGameName = null
+                query = ""
+                resetSearch()
             },
             onCancel = {
-                showAddDialog = false
+                pendingGameName = null
             }
         )
+    }
+}
+
+private data class GameSearchResult(
+    val key: String,
+    val name: String,
+    val imageUrl: String?
+)
+
+@Composable
+private fun GameSearchResultCard(
+    result: GameSearchResult,
+    isAdded: Boolean,
+    onAddClick: () -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(88.dp)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!result.imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(result.imageUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "${result.name} image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+
+            Text(
+                text = result.name,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Button(
+                onClick = onAddClick,
+                enabled = !isAdded
+            ) {
+                Text(if (isAdded) "Added" else "Add")
+            }
+        }
     }
 }
 
@@ -292,37 +523,25 @@ fun GameLibraryScreen(
 private fun GamePosterCard(
     game: SavedGameEntity,
     imageUrl: String?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFavoriteClick: () -> Unit
 ) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1.35f)
-                    .background(
-                        MaterialTheme.colorScheme.surfaceVariant
-                    ),
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                if (imageUrl.isNullOrBlank()) {
-                    Text(
-                        text = game.name,
-                        modifier = Modifier.padding(12.dp),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        textAlign = TextAlign.Center,
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                } else {
+                if (!imageUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = ImageRequest.Builder(
-                            LocalContext.current
-                        )
+                        model = ImageRequest.Builder(LocalContext.current)
                             .data(imageUrl)
                             .crossfade(true)
                             .build(),
@@ -332,18 +551,34 @@ private fun GamePosterCard(
                     )
                 }
 
+                FavoriteIcon(
+                    isFavorite = game.isFavorite,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.65f),
+                            shape = RoundedCornerShape(50)
+                        )
+                        .clickable(onClick = onFavoriteClick)
+                        .padding(horizontal = 7.dp, vertical = 3.dp),
+                    size = 20.dp,
+                    activeColor = Color(0xFFE53935),
+                    inactiveColor = Color.White
+                )
+
                 UserRatingBadge(
                     rating = game.userRating,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(8.dp)
+                        .padding(6.dp)
                 )
 
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(8.dp)
-                        .size(34.dp)
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(26.dp)
                         .clip(CircleShape)
                         .background(
                             if (game.isFinished) {
@@ -357,32 +592,14 @@ private fun GamePosterCard(
                     Text(
                         text = "✓",
                         color = Color.White,
-                        fontSize = 19.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
-
-            Column(
-                modifier = Modifier.padding(10.dp)
-            ) {
-                Text(
-                    text = game.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = formatHours(game.hoursPlayedMinutes),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
+
+        MediaCardTitle(title = game.name)
     }
 }
 
@@ -836,6 +1053,7 @@ private fun GameDetailRow(
 
 @Composable
 private fun AddGameDialog(
+    initialName: String = "",
     onAdd: (
         name: String,
         hoursPlayedMinutes: Int,
@@ -844,8 +1062,8 @@ private fun AddGameDialog(
     ) -> Unit,
     onCancel: () -> Unit
 ) {
-    var name by remember {
-        mutableStateOf("")
+    var name by remember(initialName) {
+        mutableStateOf(initialName)
     }
     var hoursText by remember {
         mutableStateOf("00:00h")
