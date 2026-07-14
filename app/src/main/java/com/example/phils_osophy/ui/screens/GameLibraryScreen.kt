@@ -176,7 +176,7 @@ fun GameLibraryScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = "Games",
+            text = "Games (${games.size})",
             style = MaterialTheme.typography.headlineMedium
         )
 
