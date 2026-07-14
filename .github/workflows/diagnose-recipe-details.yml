@@ -1,0 +1,41 @@
+name: Diagnose Recipe details
+
+on:
+  push:
+    branches:
+      - agent/recipe-detail-screens
+    paths:
+      - .github/workflows/diagnose-recipe-details.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/recipe-detail-screens
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Run diagnostic build
+        env:
+          TMDB_READ_TOKEN: placeholder
+          RAWG_API_KEY: placeholder
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew :app:assembleDebug > /tmp/recipe-build.log 2>&1
+          status=$?
+          tail -n 160 /tmp/recipe-build.log > recipe-detail-build.log
+          echo "GRADLE_EXIT_CODE=$status" >> recipe-detail-build.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add recipe-detail-build.log
+          git commit -m "Record Recipe detail build diagnostics"
+          git push
