@@ -27,6 +27,7 @@ jobs:
         shell: python
         run: |
           from pathlib import Path
+          import re
 
           files = [
               (
@@ -46,10 +47,9 @@ jobs:
               ),
           ]
 
-          old_multiline_card = '''    Card(
-              modifier = Modifier.fillMaxWidth()
-          ) {'''
-          old_inline_card = '    Card(modifier = Modifier.fillMaxWidth()) {'
+          card_pattern = re.compile(
+              r'    Card\(\s*modifier = Modifier\.fillMaxWidth\(\)\s*\)\s*\{'
+          )
           new_card = '''    Card(
               modifier = Modifier
                   .fillMaxWidth()
@@ -67,16 +67,16 @@ jobs:
               start = text.index(start_marker)
               end = text.index(end_marker, start)
               block = text[start:end]
+              updated, count = card_pattern.subn(
+                  lambda _: new_card,
+                  block,
+                  count=1
+              )
 
-              if old_multiline_card in block:
-                  updated = block.replace(old_multiline_card, new_card, 1)
-              elif old_inline_card in block:
-                  updated = block.replace(old_inline_card, new_card, 1)
-              else:
-                  raise RuntimeError(f'Could not find result card in {path}')
-
-              if updated == block:
-                  raise RuntimeError(f'No change made in {path}')
+              if count != 1:
+                  raise RuntimeError(
+                      f'Expected one result card in {path}, found {count}'
+                  )
               if 'if (onImageClick != null)' not in updated:
                   raise RuntimeError(f'Missing saved-only click guard in {path}')
 
