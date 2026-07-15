@@ -675,7 +675,17 @@ private fun LibrarySearchResult(
     onImageClick: (() -> Unit)? = null,
     onAddClick: (() -> Unit)? = null
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+    modifier = Modifier
+        .fillMaxWidth()
+        .then(
+            if (onImageClick != null) {
+                Modifier.clickable(onClick = onImageClick)
+            } else {
+                Modifier
+            }
+        )
+) {
         Row(modifier = Modifier.padding(12.dp)) {
             val posterUrl = posterPath?.let { path ->
                 "$TMDB_LIBRARY_POSTER_BASE_URL$path"
