@@ -5,6 +5,7 @@ import com.example.phils_osophy.BuildConfig
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.Json
+import okhttp3.Call
 import okhttp3.HttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -18,6 +19,7 @@ private const val TMDB_HTTP_MAX_RETRIES = 4
 private const val TMDB_HTTP_RETRY_BASE_DELAY_MILLIS = 1_000L
 private const val TMDB_HTTP_RETRY_MAX_DELAY_MILLIS = 8_000L
 private const val TMDB_HTTP_RETRY_AFTER_MAX_DELAY_MILLIS = 30_000L
+private const val TMDB_RETRY_CANCELLATION_POLL_MILLIS = 250L
 private const val TMDB_HTTP_LOG_TAG = "TmdbClient"
 
 private val RetryableTmdbStatusCodes = setOf(429, 500, 502, 503, 504)
@@ -84,13 +86,16 @@ private fun executeTmdbRequestWithRetry(
     chain: Interceptor.Chain,
     request: Request
 ): Response {
+    val call = chain.call()
     var retryCount = 0
 
     while (true) {
+        throwIfTmdbCallCanceled(call)
+
         val response = try {
             chain.proceed(request)
         } catch (exception: IOException) {
-            if (retryCount >= TMDB_HTTP_MAX_RETRIES) {
+            if (call.isCanceled() || retryCount >= TMDB_HTTP_MAX_RETRIES) {
                 throw exception
             }
 
@@ -104,9 +109,14 @@ private fun executeTmdbRequestWithRetry(
                     "retry ${retryCount + 1}/$TMDB_HTTP_MAX_RETRIES in ${delayMillis}ms",
                 exception
             )
-            sleepBeforeTmdbRetry(delayMillis)
+            sleepBeforeTmdbRetry(delayMillis, call)
             retryCount += 1
             continue
+        }
+
+        if (call.isCanceled()) {
+            response.close()
+            throw IOException("TMDB request was canceled.")
         }
 
         if (
@@ -126,7 +136,7 @@ private fun executeTmdbRequestWithRetry(
                 "retry ${retryCount + 1}/$TMDB_HTTP_MAX_RETRIES in ${delayMillis}ms"
         )
         response.close()
-        sleepBeforeTmdbRetry(delayMillis)
+        sleepBeforeTmdbRetry(delayMillis, call)
         retryCount += 1
     }
 }
@@ -148,11 +158,33 @@ private fun tmdbRetryDelayMillis(
         .coerceAtMost(TMDB_HTTP_RETRY_MAX_DELAY_MILLIS)
 }
 
-private fun sleepBeforeTmdbRetry(delayMillis: Long) {
-    try {
-        Thread.sleep(delayMillis)
-    } catch (exception: InterruptedException) {
-        Thread.currentThread().interrupt()
-        throw IOException("TMDB retry was interrupted.", exception)
+private fun throwIfTmdbCallCanceled(call: Call) {
+    if (call.isCanceled()) {
+        throw IOException("TMDB request was canceled.")
     }
+}
+
+private fun sleepBeforeTmdbRetry(
+    delayMillis: Long,
+    call: Call
+) {
+    var remainingMillis = delayMillis
+
+    while (remainingMillis > 0L) {
+        throwIfTmdbCallCanceled(call)
+
+        val sleepMillis = minOf(
+            remainingMillis,
+            TMDB_RETRY_CANCELLATION_POLL_MILLIS
+        )
+        try {
+            Thread.sleep(sleepMillis)
+        } catch (exception: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw IOException("TMDB retry was interrupted.", exception)
+        }
+        remainingMillis -= sleepMillis
+    }
+
+    throwIfTmdbCallCanceled(call)
 }
