@@ -366,8 +366,16 @@ private fun MovieResultCard(
     onAddClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    modifier = Modifier
+        .fillMaxWidth()
+        .then(
+            if (onImageClick != null) {
+                Modifier.clickable(onClick = onImageClick)
+            } else {
+                Modifier
+            }
+        )
+) {
         Row(
             modifier = Modifier.padding(12.dp)
         ) {
