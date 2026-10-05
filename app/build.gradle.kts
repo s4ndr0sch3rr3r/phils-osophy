@@ -77,6 +77,11 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
+    // Retry tests run on the JVM; Android logging is incidental to their assertions.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
